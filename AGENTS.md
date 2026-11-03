@@ -627,9 +627,12 @@ cd src/go && go test ./...
 ```
 
 Databasen ligger i `~/.learn/learn.db` (overridable via `LEARN_DB` eller `--db`).
+Sätt `DATABASE_URL` för att använda PostgreSQL i stället för SQLite, då
+använder både CLI:t och API:t samma PostgreSQL-databas. Båda lagren
+implementerar `store.Repository` (se `internal/store/postgres.go`).
 Paketen: `internal/epub` (parsning), `internal/text` (textanalys),
 `internal/knowledge` (koncept + graf), `internal/learning` (quiz + förklaringar),
-`internal/ideas` (idéer), `internal/store` (SQLite + `Repository`-gränssnitt),
+`internal/ideas` (idéer), `internal/store` (SQLite + PostgreSQL + `Repository`-gränssnitt),
 `internal/learn` (pipeline), `internal/api` (HTTP-handlare),
 `internal/analysis` (jämförelse mot kunskapsbasen).
 

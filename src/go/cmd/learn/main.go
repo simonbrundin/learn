@@ -38,12 +38,21 @@ func main() {
 	command := args[0]
 	rest := args[1:]
 
-	st, err := store.Open(dbPath)
+	// DATABASE_URL väljer PostgreSQL. Utan den används SQLite, med --db
+	// eller LEARN_DB om det anges.
+	var repo store.Repository
+	var err error
+	if dbPath == "" {
+		repo, err = store.OpenFromEnv()
+	} else {
+		repo, err = store.Open(dbPath)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Fel:", err)
 		os.Exit(1)
 	}
-	defer st.Close()
+	defer repo.Close()
+	st := repo
 
 	var code int
 	switch command {
@@ -134,7 +143,7 @@ func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 }
 
 func parseGlobalFlags(args []string) (string, []string) {
-	dbPath := store.DefaultPath()
+	dbPath := ""
 	var remaining []string
 	for i := 0; i < len(args); i++ {
 		switch {
@@ -154,7 +163,7 @@ func parseGlobalFlags(args []string) (string, []string) {
 // Kommandon
 // ---------------------------------------------------------------------------
 
-func cmdImport(args []string, st *store.Store) int {
+func cmdImport(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("import", flag.ExitOnError)
 	maxConcepts := fs.Int("max-concepts", 120, "max antal koncept per bok")
 	positional, err := parseFlags(fs, args)
@@ -188,7 +197,7 @@ func cmdImport(args []string, st *store.Store) int {
 }
 
 // printContribution visar kort vad boken tillför den samlade kunskapsbasen.
-func printContribution(st *store.Store, book model.Book) {
+func printContribution(st store.Repository, book model.Book) {
 	insight, err := analysis.Compare(book.ID, st, analysis.DefaultOptions())
 	if err != nil || insight == nil {
 		return
@@ -203,7 +212,7 @@ func printContribution(st *store.Store, book model.Book) {
 
 // cmdSync importerar böcker från Calibre-biblioteket. Med --watch körs
 // synken om med jämna mellanrum så att nya böcker tas in automatiskt.
-func cmdSync(args []string, st *store.Store) int {
+func cmdSync(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("sync", flag.ExitOnError)
 	library := fs.String("library", "", "Calibre-biblioteket (default: $LEARN_CALIBRE_LIBRARY eller ~/calibre)")
 	watch := fs.Bool("watch", false, "kör synken om med jämna mellanrum")
@@ -277,7 +286,7 @@ func cmdSync(args []string, st *store.Store) int {
 
 // cmdCompare visar vad en bok tillför kunskapsbasen och var den avviker
 // från övrig kunskap.
-func cmdCompare(args []string, st *store.Store) int {
+func cmdCompare(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("compare", flag.ExitOnError)
 	limit := fs.Int("limit", 10, "antal koncept per kategori")
 	positional, err := parseFlags(fs, args)
@@ -368,7 +377,7 @@ func snippet(value string) string {
 	return string(runes[:72]) + "…"
 }
 
-func cmdList(args []string, st *store.Store) int {
+func cmdList(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	if _, err := parseFlags(fs, args); err != nil {
 		return 1
@@ -394,7 +403,7 @@ func cmdList(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdShow(args []string, st *store.Store) int {
+func cmdShow(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("show", flag.ExitOnError)
 	limit := fs.Int("limit", 15, "antal koncept att visa")
 	positional, err := parseFlags(fs, args)
@@ -443,7 +452,7 @@ func cmdShow(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdAsk(args []string, st *store.Store) int {
+func cmdAsk(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("ask", flag.ExitOnError)
 	bookFlag := fs.String("book", "", "bok-id eller titel")
 	positional, err := parseFlags(fs, args)
@@ -470,7 +479,7 @@ func cmdAsk(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdExplain(args []string, st *store.Store) int {
+func cmdExplain(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("explain", flag.ExitOnError)
 	level := fs.String("level", learning.LevelStandard, "novice|standard|advanced")
 	bookFlag := fs.String("book", "", "bok-id eller titel")
@@ -498,7 +507,7 @@ func cmdExplain(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdConnect(args []string, st *store.Store) int {
+func cmdConnect(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("connect", flag.ExitOnError)
 	bookFlag := fs.String("book", "", "bok-id eller titel")
 	positional, err := parseFlags(fs, args)
@@ -533,7 +542,7 @@ func cmdConnect(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdBrainstorm(args []string, st *store.Store) int {
+func cmdBrainstorm(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("brainstorm", flag.ExitOnError)
 	bookFlag := fs.String("book", "", "bok-id eller titel")
 	limit := fs.Int("limit", 6, "antal idéer")
@@ -571,7 +580,7 @@ func cmdBrainstorm(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdQuiz(args []string, st *store.Store) int {
+func cmdQuiz(args []string, st store.Repository) int {
 	fs := flag.NewFlagSet("quiz", flag.ExitOnError)
 	count := fs.Int("count", 10, "antal frågor")
 	regenerate := fs.Bool("regenerate", false, "generera nya frågor")
@@ -640,7 +649,7 @@ func cmdQuiz(args []string, st *store.Store) int {
 	return 0
 }
 
-func cmdInteractive(args []string, st *store.Store) int {
+func cmdInteractive(args []string, st store.Repository) int {
 	fmt.Println("Interaktiv session. Skriv 'hjälp' för kommandon, 'quit' för att avsluta.")
 	reader := bufio.NewReader(os.Stdin)
 	var context *model.Concept
@@ -737,7 +746,7 @@ const helpText = `Kommandon:
 // Hjälpfunktioner
 // ---------------------------------------------------------------------------
 
-func resolveBook(st *store.Store, query string) (model.Book, bool) {
+func resolveBook(st store.Repository, query string) (model.Book, bool) {
 	books, err := st.ListBooks()
 	if err != nil {
 		fmt.Println("Fel:", err)
@@ -867,7 +876,7 @@ func grade(question model.Question, response string) bool {
 	}
 }
 
-func recordAttempt(st *store.Store, question model.Question, correct bool) {
+func recordAttempt(st store.Repository, question model.Question, correct bool) {
 	var previous *model.Attempt
 	if attempt, ok := st.LatestAttempt(question.ID); ok && attempt != nil {
 		previous = attempt

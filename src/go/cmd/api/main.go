@@ -87,9 +87,9 @@ func main() {
 	}))
 
 	// Kunskapsbasen: böcker, koncept, grafer, quiz och idéer.
-	// Samma SQLite-fil som CLI:t använder (se LEARN_DB).
+	// DATABASE_URL väljer PostgreSQL, annars SQLite (se LEARN_DB).
 	knowledgeBaseState := "ready"
-	repo, err := store.Open(store.DefaultPath())
+	repo, err := store.OpenFromEnv()
 	if err != nil {
 		// API:t ska fortfarande starta så att health check fungerar,
 		// men kunskapsbasen blir tom.

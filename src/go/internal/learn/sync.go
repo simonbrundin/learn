@@ -35,6 +35,8 @@ type SyncResult struct {
 	Updated []ImportResult
 	// Skipped är böcker som redan fanns och inte ändrats.
 	Skipped int
+	// Waiting är böcker som misslyckades tidigare och inte ändrats sedan.
+	Waiting int
 	// TooLarge är böcker som hoppades över för att filen var för stor.
 	TooLarge int
 	// Failed är böcker som inte kunde importeras.
@@ -50,6 +52,9 @@ func (r *SyncResult) Total() int {
 func (r *SyncResult) Summary() string {
 	text := fmt.Sprintf("%d nya, %d uppdaterade, %d redan synkade",
 		len(r.Imported), len(r.Updated), r.Skipped)
+	if r.Waiting > 0 {
+		text += fmt.Sprintf(", %d väntar på fix", r.Waiting)
+	}
 	if r.TooLarge > 0 {
 		text += fmt.Sprintf(", %d för stora filer", r.TooLarge)
 	}
@@ -100,7 +105,7 @@ func SyncCalibre(lib *calibre.Library, repo store.Repository, opts SyncOptions) 
 		// En bok som redan misslyckades prövas inte igen förrän filen ändras.
 		if failure, failed := failedAt[filepath.Clean(candidate.Path)]; failed && !ok {
 			if !changedSince(candidate.Path, failure.FailedAt) {
-				result.Skipped++
+				result.Waiting++
 				continue
 			}
 		}

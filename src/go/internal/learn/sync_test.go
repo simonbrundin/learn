@@ -194,8 +194,8 @@ func TestSyncRemembersFailedBook(t *testing.T) {
 	if len(result.Failed) != 0 {
 		t.Fatalf("väntade inga nya misslyckanden, fick %d", len(result.Failed))
 	}
-	if result.Skipped != 1 {
-		t.Fatalf("väntade 1 hoppad bok, fick %d", result.Skipped)
+	if result.Waiting != 1 {
+		t.Fatalf("väntade 1 bok som väntar på fix, fick %d", result.Waiting)
 	}
 }
 

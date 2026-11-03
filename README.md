@@ -62,7 +62,7 @@ learn/
 │   │       ├── knowledge/ # Konceptextraktion + kunskapsgraf
 │   │       ├── learning/  # Frågegenerator (SM-2) + förklaringar
 │   │       ├── ideas/     # Idégenerering
-│   │       ├── store/     # SQLite-lager + repository-gränssnitt
+│   │       ├── store/     # SQLite- och PostgreSQL-lager + repository-gränssnitt
 │   │       └── learn/     # Importpipeline
 │   └── nuxt/            # Nuxt SPA – se AGENTS.md
 └── environments/        # Kubernetes (kustomize) per miljö
@@ -157,11 +157,17 @@ efter att maskinen startat.
 
 ## REST-API
 
-Samma kunskapsbas kan läsas via HTTP. API:t och CLI:t delar SQLite-filen
-(`~/.learn/learn.db`, override med `LEARN_DB`).
+Samma kunskapsbas kan läsas via HTTP. Som standard delar API:t och CLI:t
+SQLite-filen (`~/.learn/learn.db`, override med `LEARN_DB`). Sätt
+`DATABASE_URL` för att använda PostgreSQL i stället, då använder båda
+lagringslagren samma databas.
 
 ```bash
 # Starta API:t
+cd src/go && go run ./cmd/api
+
+# Med PostgreSQL
+export DATABASE_URL="postgres://user:pass@host:5432/learn?sslmode=disable"
 cd src/go && go run ./cmd/api
 
 # Böcker och grafer
@@ -323,7 +329,8 @@ Resultat: 8/10 rätt (80%)
 - [x] REST-API med OpenAPI/Scalar-dokumentation
 - [x] Web-GUI (Nuxt SPA)
 - [x] Spaced repetition (SM-2 algoritm)
-- [ ] Kunskapsbas i PostgreSQL (K8s) i stället för lokal SQLite
+- [x] Kunskapsbas i PostgreSQL (`DATABASE_URL`) med samma repository-gränssnitt
+- [ ] Kör PostgreSQL-lagret i klusret (K8s + CNPG)
 - [ ] AI-förklaringar med lokal modell
 - [ ] Moln sync (valfritt)
 - [ ] Mobilt GUI

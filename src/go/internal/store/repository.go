@@ -34,6 +34,9 @@ type Repository interface {
 	Failures() ([]model.ImportFailure, error)
 	ClearFailure(sourcePath string) error
 
+	// Path ger en beskrivning av var lagringen ligger.
+	Path() string
+
 	Close() error
 }
 
