@@ -48,51 +48,52 @@ Ett inlärningssystem som tar emot e-pub-filer och extraherar den verkligt värd
 
 ```
 learn/
-├── importer/           # E-pub parsing och extraktion
-│   ├── epub_parser.py
-│   └── text_processor.py
-├── knowledge/          # Kunskapsrepresentation
-│   ├── concepts.py     # Konceptmodellering
-│   └── graph.py        # Kunskapsgraf
-├── learning/          # Inlärningsmotorer
-│   ├── quiz_engine.py  # Frågegenerering
-│   └── explanation.py  # Forklaringssystem
-├── ideas/             # Brainstorming
-│   └── brainstorm.py  # Idégenerering
-├── cli/               # Kommandoradsgranssnitt
-└── web/               # Webbgranssnitt (framtid)
+├── src/
+│   ├── go/              # Go – API, CLI/TUI och kunskapssystemet
+│   │   ├── cmd/
+│   │   │   ├── api/     # REST API (Gin)
+│   │   │   ├── cli/     # Enkel counter-CLI/TUI (demo)
+│   │   │   └── learn/   # Kommandoradsgränssnitt för kunskapssystemet
+│   │   └── internal/
+│   │       ├── epub/    # E-pub-parsning (zip/OPF/NCX)
+│   │       ├── text/    # Textanalys: meningar, nyckelord, definitioner
+│   │       ├── knowledge/ # Konceptextraktion + kunskapsgraf
+│   │       ├── learning/  # Frågegenerator (SM-2) + förklaringar
+│   │       ├── ideas/     # Idégenerering
+│   │       ├── store/     # SQLite-lager (modernc.org/sqlite, CGO-fritt)
+│   │       └── learn/     # Importpipeline
+│   └── nuxt/            # Nuxt SPA – se AGENTS.md
+└── environments/        # Kubernetes (kustomize) per miljö
 ```
 
 ## Teknisk Stack
 
-- **Python 3.11+** — Kärnlogik
-- **python-epub** — E-pub parsing
-- **Spacy** — NLP och textanalys
-- **NetworkX** — Kunskapsgraf
-- **SQLite** — Lokal databas
-- **Gradio/Streamlit** — Webb-GUI (framtid)
+- **Go 1.27+** — Kärnlogik och CLI
+- **Standardbiblioteket + x/net/html** — E-pub-parsning och textextraktion
+- **modernc.org/sqlite** — Lokal databas (`~/.learn/learn.db`), ren Go utan CGO
+- **heuristisk NLP** — koncept, definitioner och citat upptäcks utan tunga modeller
 
 ## Kom igång
 
 ```bash
 # Klona repo
 git clone https://github.com/ditt-namn/learn.git
-cd learn
+cd learn/src/go
 
-# Installera beroenden
-pip install -r requirements.txt
+# Bygg CLI
+go build -o learn ./cmd/learn
 
 # Importera en bok
-python -m learn.cli import min-bok.epub
+./learn import min-bok.epub
 
 # Starta interaktiv session
-python -m learn.cli interactive
+./learn interactive
 
 # Generera frågor
-python -m learn.cli quiz "min-bok"
+./learn quiz --count 10
 
 # Brainstorma
-python -m learn.cli brainstorm "Vad kan jag lara mig om X"
+./learn brainstorm "Vad kan jag lära mig om X"
 ```
 
 ## Arbetsflöde
@@ -119,52 +120,49 @@ python -m learn.cli brainstorm "Vad kan jag lara mig om X"
 
 ### Importera och analysera
 ```bash
-$ python -m learn.cli import "Thinking Fast and Slow.epub"
-Importing... Thinking Fast and Slow (Daniel Kahneman)
-Found 500+ concepts extracted
-Saved to ~/.learn/books/kahneman-fast-slow/
+$ ./learn import "Thinking Fast and Slow.epub"
+Importerar... Thinking Fast and Slow.epub
+Inläst: Thinking Fast and Slow (Daniel Kahneman)
+Hittade 500+ koncept
+Sparat i /home/user/.learn/learn.db
 ```
 
 ### Ställ frågor
 ```bash
-$ python -m learn.cli ask "Vad handlar System 1 och System 2 om?"
-System 1 and System 2 are Kahneman's framework for two modes of thinking:
-
-  SYSTEM 1 (Fast thinking)
-  - Automatic, intuitive, emotional
-  - Operates effortlessly
-  - Examples: Detecting hostility, completing "bread and ..."
-
-  SYSTEM 2 (Slow thinking)
-  - Deliberate, logical, effortful
-  - Requires attention
-  - Examples: Counting, learning new skills
-
-Kopplade koncept: Availability heuristic, Anchoring, Loss aversion
+$ ./learn ask "Vad handlar System 1 och System 2 om?"
+System 1 — the fast, automatic and emotional thinking that runs without effort
+  Kopplar till: System 2, Availability heuristic
+System 2 — the slow, deliberate and analytical thinking that requires attention
+  Kopplar till: System 1, Loss aversion
 ```
 
 ### Testa kunskap
 ```bash
-$ python -m learn.cli quiz --count 10
+$ ./learn quiz --count 10
 Kunskapstest: Thinking Fast and Slow
 
-1. Vilket system aktiveras nar du fattar snabba beslut?
-   a) System 1   b) System 2   c) Bada   d) Inget
+1. Vad betyder System 1?
+   1) the slow, deliberate and analytical thinking that requires attention
+   2) the fast, automatic and emotional thinking that runs without effort
+   3) the scarce resource that System 2 needs
+   Ditt svar (1-3, eller skriv 'skip'): 2
+   Rätt!
 
-2. Vad ar en "mental short-cut" kallad i boken?
+2. Stämmer detta på Loss aversion? "..." 
    ...
 
-Resultat: 8/10 ratt (80%) - Bra jobbat!
+Resultat: 8/10 rätt (80%)
 ```
 
 ## Framtidsplan
 
-- [ ] E-pub import med felhantering
-- [ ] Konceptextraktion med NLP
-- [ ] Frågegenerator
-- [ ] Kunskapsgraf med visalisering
+- [x] E-pub import med felhantering
+- [x] Konceptextraktion (heuristisk, utan NLP-beroende)
+- [x] Frågegenerator
+- [x] Kunskapsgraf med kopplingar och sökvägar
+- [ ] Kunskapsgraf med visualisering
 - [ ] Web-GUI med Gradio
-- [ ] Spaced repetition (SM-2 algoritm)
+- [x] Spaced repetition (SM-2 algoritm)
 - [ ] AI-förklaringar med lokal modell
 - [ ] Moln sync (valfritt)
 - [ ] Mobilt GUI
