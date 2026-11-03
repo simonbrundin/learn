@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -114,6 +115,56 @@ func TestCLIQuizAcceptsAnswers(t *testing.T) {
 	}
 	if !strings.Contains(output, "Resultat:") {
 		t.Fatalf("quiz saknar resultatet: %q", output)
+	}
+}
+
+func TestCLISyncImportsCalibreLibrary(t *testing.T) {
+	binary := buildCLI(t)
+	library := t.TempDir()
+
+	// Ett minimalt Calibre-bibliotek med en riktig e-pub i.
+	if _, err := testutil.BuildEpub(filepath.Join(library, "Bok (1)")); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(library, "metadata.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, path TEXT, timestamp REAL)`,
+		`CREATE TABLE data (id INTEGER PRIMARY KEY, book INTEGER, format TEXT, uncompressed_size INTEGER, name TEXT)`,
+		`CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT)`,
+		`CREATE TABLE books_authors_link (id INTEGER PRIMARY KEY, book INTEGER, author INTEGER)`,
+		`INSERT INTO books (id, title, path, timestamp) VALUES (1, 'Thinking About Thinking', 'Bok (1)', 1700000000)`,
+		`INSERT INTO data (id, book, format, uncompressed_size, name) VALUES (1, 1, 'EPUB', 100, 'thinking')`,
+		`INSERT INTO authors (id, name) VALUES (1, 'Test Author')`,
+		`INSERT INTO books_authors_link (id, book, author) VALUES (1, 1, 1)`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	learnDB := filepath.Join(t.TempDir(), "cli.db")
+	output := runCLI(t, binary, "", "--db", learnDB, "sync", "--library", library)
+	if !strings.Contains(output, "Thinking About Thinking") {
+		t.Fatalf("synkutskriften saknar titeln: %q", output)
+	}
+	if !strings.Contains(output, "1 nya") {
+		t.Fatalf("synkutskriften saknar sammanfattningen: %q", output)
+	}
+
+	output = runCLI(t, binary, "", "--db", learnDB, "list")
+	if !strings.Contains(output, "Thinking About Thinking") {
+		t.Fatalf("listutskriften saknar titeln: %q", output)
+	}
+
+	// En andra körning ska hoppa över boken.
+	output = runCLI(t, binary, "", "--db", learnDB, "sync", "--library", library)
+	if !strings.Contains(output, "1 redan synkade") {
+		t.Fatalf("andra körningen synkade inte om boken: %q", output)
 	}
 }
 

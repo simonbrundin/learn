@@ -59,6 +59,47 @@ func TestFindBookByTitleAndID(t *testing.T) {
 	}
 }
 
+func TestDeleteBookRemovesEverything(t *testing.T) {
+	st := openStore(t)
+	book := model.Book{Title: "Thinking Fast and Slow", Author: "Kahneman"}
+	if err := st.AddBook(&book); err != nil {
+		t.Fatalf("kunde inte spara boken: %v", err)
+	}
+	if err := st.AddChapter(&model.Chapter{BookID: book.ID, Index: 0, Title: "Kapitel", Text: "Text"}); err != nil {
+		t.Fatalf("kunde inte spara kapitlet: %v", err)
+	}
+	if err := st.AddConcepts([]model.Concept{
+		{BookID: book.ID, Name: "System 1", Importance: 0.7},
+		{BookID: book.ID, Name: "System 2", Importance: 0.5},
+	}); err != nil {
+		t.Fatalf("kunde inte spara koncepten: %v", err)
+	}
+	if err := st.AddEdge(model.Edge{SourceID: 1, TargetID: 2, Relation: "related", BookID: book.ID}); err != nil {
+		t.Fatalf("kunde inte spara relationen: %v", err)
+	}
+
+	if err := st.DeleteBook(book.ID); err != nil {
+		t.Fatalf("kunde inte ta bort boken: %v", err)
+	}
+
+	books, _ := st.ListBooks()
+	if len(books) != 0 {
+		t.Fatalf("boken finns kvar: %v", books)
+	}
+	chapters, _ := st.Chapters(book.ID)
+	if len(chapters) != 0 {
+		t.Fatalf("kapitlen finns kvar: %v", chapters)
+	}
+	concepts, _ := st.Concepts(book.ID)
+	if len(concepts) != 0 {
+		t.Fatalf("koncepten finns kvar: %v", concepts)
+	}
+	edges, _ := st.Edges(book.ID)
+	if len(edges) != 0 {
+		t.Fatalf("relationerna finns kvar: %v", edges)
+	}
+}
+
 func TestChaptersAndConceptsRoundTrip(t *testing.T) {
 	st := openStore(t)
 	book := model.Book{Title: "Bok"}

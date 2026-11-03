@@ -697,6 +697,39 @@ beskrivningen här:
 All rörelse är CSS-native (inga bibliotek) och slås av helt under
 `prefers-reduced-motion: reduce`.
 
+### Calibre-synk
+
+`internal/calibre` läser Calibres `metadata.db` (skrivskyddat, så Calibre kan
+köra samtidigt) och listar böcker med e-pub-format. `internal/learn/sync.go`
+importerar dem via `learn.ImportBook`.
+
+```bash
+# Synka biblioteket en gång
+learn sync --library ~/calibre
+
+# Köra om automatiskt
+learn sync --watch --interval 10m
+```
+
+Så fungerar synken:
+
+| Läge | Beteende |
+| ---- | -------- |
+| Ny bok | Importeras |
+| Redan importerad | Hoppas över |
+| Filen ändrad (mtime > imported_at) | Importeras om (`DeleteBook` först) |
+| Importen misslyckades | Registreras i `import_failures` och prövas inte igen förrän filen ändras |
+| Filen större än `--max-file-size` (150 MB) | Hoppas över – skannade böcker utan text |
+| Flera format | Calibres `EPUB` väljs före `ORIGINAL_EPUB` |
+
+Automatiserad körning sker via systemd-enheterna i `src/go/systemd/`:
+
+```bash
+go build -o ~/.local/bin/learn ./cmd/learn
+cp src/go/systemd/learn-sync.{service,timer} ~/.config/systemd/user/
+systemctl --user enable --now learn-sync.timer
+```
+
 ### PostgreSQL (om lokal)
 
 ```bash

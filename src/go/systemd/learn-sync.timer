@@ -1,0 +1,13 @@
+[Unit]
+Description=Synka Calibre-böcker till Learn var tionde minut
+Documentation=https://github.com/simon/repo-template
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+# Missade körningar (maskinen var avstängd) tas igen vid start.
+Persistent=true
+Unit=learn-sync.service
+
+[Install]
+WantedBy=timers.target

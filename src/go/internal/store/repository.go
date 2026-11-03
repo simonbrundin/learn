@@ -24,6 +24,14 @@ type Repository interface {
 	Questions(bookID int64) ([]model.Question, error)
 	LatestAttempt(questionID int64) (*model.Attempt, bool)
 
+	// Borttagning
+	DeleteBook(bookID int64) error
+
+	// Misslyckade importer
+	RecordFailure(failure model.ImportFailure) error
+	Failures() ([]model.ImportFailure, error)
+	ClearFailure(sourcePath string) error
+
 	Close() error
 }
 

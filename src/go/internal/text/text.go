@@ -275,6 +275,11 @@ func FindDefinitions(s string, limit int) []Definition {
 			if len([]rune(definition)) < 8 || len([]rune(definition)) > 400 {
 				continue
 			}
+			// En definition som upprepar termen gång på gång är sannolikt
+			// flera rubriker som sammanslagnits, inte en förklaring.
+			if strings.Count(strings.ToLower(definition), strings.ToLower(term)) > 2 {
+				continue
+			}
 			key := strings.ToLower(term)
 			if seen[key] {
 				continue

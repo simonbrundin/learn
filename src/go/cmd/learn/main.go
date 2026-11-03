@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/simon/repo-template/internal/calibre"
 	"github.com/simon/repo-template/internal/ideas"
 	"github.com/simon/repo-template/internal/learn"
 	"github.com/simon/repo-template/internal/learning"
@@ -47,6 +48,8 @@ func main() {
 	switch command {
 	case "import":
 		code = cmdImport(rest, st)
+	case "sync":
+		code = cmdSync(rest, st)
 	case "list":
 		code = cmdList(rest, st)
 	case "show":
@@ -79,6 +82,7 @@ func usage() {
 
 Kommandon:
   import <fil.epub>        Importera en e-pub-fil
+  sync                    Synka böcker från Calibre (--watch kör om automatiskt)
   list                     Lista importerade böcker
   show [bok]               Visa en bok i detalj
   ask "<fråga>"            Fråga kunskapsbasen
@@ -175,6 +179,80 @@ func cmdImport(args []string, st *store.Store) int {
 	fmt.Println()
 	fmt.Printf("Hittade %d koncept\n", len(result.Concepts))
 	fmt.Printf("Sparat i %s\n", st.Path())
+	return 0
+}
+
+// cmdSync importerar böcker från Calibre-biblioteket. Med --watch körs
+// synken om med jämna mellanrum så att nya böcker tas in automatiskt.
+func cmdSync(args []string, st *store.Store) int {
+	fs := flag.NewFlagSet("sync", flag.ExitOnError)
+	library := fs.String("library", "", "Calibre-biblioteket (default: $LEARN_CALIBRE_LIBRARY eller ~/calibre)")
+	watch := fs.Bool("watch", false, "kör synken om med jämna mellanrum")
+	interval := fs.Duration("interval", 10*time.Minute, "intervall mellan synkar vid --watch")
+	maxConcepts := fs.Int("max-concepts", 60, "max antal koncept per bok")
+	limit := fs.Int("limit", 0, "max antal böcker per körning (0 = alla)")
+	maxSize := fs.Int("max-file-size", 150, "max filstorlek i MB (0 = ingen gräns)")
+	refresh := fs.Bool("refresh", false, "importera om redan importerade böcker")
+	dryRun := fs.Bool("dry-run", false, "visa vad som skulle importeras utan att skriva")
+	if _, err := parseFlags(fs, args); err != nil {
+		return 1
+	}
+
+	opts := learn.SyncOptions{
+		MaxConcepts: *maxConcepts,
+		Refresh:     *refresh,
+		Limit:       *limit,
+		MaxFileSize: int64(*maxSize) * 1024 * 1024,
+		DryRun:      *dryRun,
+	}
+
+	run := func() error {
+		lib, err := calibre.Open(*library)
+		if err != nil {
+			return err
+		}
+		defer lib.Close()
+
+		result, err := learn.SyncCalibre(lib, st, opts)
+		if err != nil {
+			return err
+		}
+		for _, imported := range result.Imported {
+			fmt.Printf("+ %s", imported.Book.Title)
+			if imported.Book.Author != "" {
+				fmt.Printf(" – %s", imported.Book.Author)
+			}
+			fmt.Printf(" (%d koncept)\n", len(imported.Concepts))
+		}
+		for _, updated := range result.Updated {
+			fmt.Printf("~ %s uppdaterad (%d koncept)\n", updated.Book.Title, len(updated.Concepts))
+		}
+		for _, failure := range result.Failed {
+			fmt.Fprintf(os.Stderr, "Fel: %v\n", failure)
+		}
+		fmt.Printf("%s\n", result.Summary())
+		return nil
+	}
+
+	if !*watch {
+		if err := run(); err != nil {
+			fmt.Fprintln(os.Stderr, "Fel:", err)
+			return 1
+		}
+		return 0
+	}
+
+	fmt.Printf("Synkar Calibre var %s. Avsluta med Ctrl+C.\n", *interval)
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Fel:", err)
+	}
+	ticker := time.NewTicker(*interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := run(); err != nil {
+			fmt.Fprintln(os.Stderr, "Fel:", err)
+		}
+	}
 	return 0
 }
 

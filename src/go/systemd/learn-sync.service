@@ -1,0 +1,13 @@
+[Unit]
+Description=Synka Calibre-böcker till Learn
+Documentation=https://github.com/simon/repo-template
+After=network.target
+
+[Service]
+Type=oneshot
+# learn läser Calibres metadata.db skrivskyddat och importerar nya
+# e-puber till ~/.learn/learn.db. flock hindrar att två synkar
+# kör samtidigt (t.ex. timer + manuell körning).
+ExecStart=/usr/bin/flock -n %h/.cache/learn-sync.lock %h/.local/bin/learn sync
+# Importeringen av en stor bok kan ta flera minuter.
+TimeoutStartSec=30min

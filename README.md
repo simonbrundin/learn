@@ -19,6 +19,7 @@ Ett inlärningssystem som tar emot e-pub-filer och extraherar den verkligt värd
 - Ladda upp valfri e-pub-fil
 - Extrahera metadata, kapitel, och fulltext
 - Behandla struktur (delar, kapitel, sektioner)
+- Synka automatiskt från Calibre-bibliotek (se Calibre-synk)
 
 ### 2. Kunskapsextraktion
 - Identifiera kärnkoncept och definitioner
@@ -97,6 +98,62 @@ go build -o learn ./cmd/learn
 # Brainstorma
 ./learn brainstorm "Vad kan jag lära mig om X"
 ```
+
+## Calibre-synk
+
+Learn läser Calibres bibliotek direkt. `metadata.db` öppnas skrivskyddat,
+så Calibre kan köra samtidigt. Endast e-puber importeras (böcker i andra
+format hoppas över).
+
+```bash
+# Synka hela biblioteket (default: ~/calibre)
+./learn sync
+
+# Se vad som skulle hända, utan att skriva
+./learn sync --dry-run
+
+# Synka ett annat bibliotek
+./learn sync --library ~/Böcker
+
+# Kör om synken automatiskt var tionde minut
+./learn sync --watch --interval 10m
+```
+
+| Flagga | Standard | Betydelse |
+| ------ | -------- | --------- |
+| `--library` | `$LEARN_CALIBRE_LIBRARY` eller `~/calibre` | Sökväg till biblioteket |
+| `--watch` | av | Kör synken om med jämna mellanrum |
+| `--interval` | `10m` | Intervall vid `--watch` |
+| `--max-concepts` | 60 | Max antal koncept per bok |
+| `--max-file-size` | 150 | Max filstorlek i MB (0 = ingen gräns) |
+| `--limit` | 0 | Max antal böcker per körning (0 = alla) |
+| `--refresh` | av | Importera om redan importerade böcker |
+| `--dry-run` | av | Visa vad som skulle importeras |
+
+Böcker som redan importerats hoppas över. En bok importeras om när filen
+ändras, och en bok som inte gick att importera prövas inte igen förrän
+filen ändras.
+
+### Automatisering med systemd
+
+Enheter ligger i `src/go/systemd/`:
+
+```bash
+# Bygg och installera CLI:t
+cd src/go && go build -o ~/.local/bin/learn ./cmd/learn
+
+# Installera enheterna
+cp src/go/systemd/learn-sync.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now learn-sync.timer
+
+# Status och logg
+systemctl --user list-timers learn-sync.timer
+journalctl --user -u learn-sync.service -f
+```
+
+Timern kör `learn sync` var tionde minut och tar igen missade körningar
+efter att maskinen startat.
 
 ## REST-API
 

@@ -17,6 +17,14 @@ type Book struct {
 	ImportedAt  time.Time `json:"imported_at"`
 }
 
+// ImportFailure beskriver en bok som inte kunde importeras.
+type ImportFailure struct {
+	SourcePath string    `json:"source_path"`
+	Title      string    `json:"title"`
+	Reason     string    `json:"reason"`
+	FailedAt   time.Time `json:"failed_at"`
+}
+
 // Slug ger en filnamnsvänlig identifierare, t.ex. "thinking-fast-and-slow".
 func (b Book) Slug() string {
 	base := []rune(b.Title)

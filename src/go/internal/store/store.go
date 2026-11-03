@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS ideas (
     basis   TEXT NOT NULL DEFAULT '[]'
 );
 
+CREATE TABLE IF NOT EXISTS import_failures (
+    source_path TEXT PRIMARY KEY,
+    title       TEXT NOT NULL DEFAULT '',
+    reason      TEXT NOT NULL DEFAULT '',
+    failed_at   REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_concepts_book ON concepts(book_id);
 CREATE INDEX IF NOT EXISTS idx_concepts_name ON concepts(name);
 CREATE INDEX IF NOT EXISTS idx_chapters_book ON chapters(book_id);
@@ -185,6 +192,71 @@ func (s *Store) ListBooks() ([]model.Book, error) {
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+// DeleteBook tar bort en bok med tillhörande kapitel, koncept, relationer,
+// frågor och idéer. Används när en bok importeras om från scratch.
+func (s *Store) DeleteBook(bookID int64) error {
+	statements := []string{
+		"DELETE FROM attempts WHERE question_id IN (SELECT id FROM questions WHERE book_id = ?)",
+		"DELETE FROM questions WHERE book_id = ?",
+		"DELETE FROM edges WHERE book_id = ?",
+		"DELETE FROM edges WHERE source_id IN (SELECT id FROM concepts WHERE book_id = ?) OR target_id IN (SELECT id FROM concepts WHERE book_id = ?)",
+		"DELETE FROM concepts WHERE book_id = ?",
+		"DELETE FROM chapters WHERE book_id = ?",
+		"DELETE FROM ideas WHERE book_id = ?",
+		"DELETE FROM books WHERE id = ?",
+	}
+	for _, statement := range statements {
+		args := []any{bookID}
+		if strings.Count(statement, "?") > 1 {
+			args = append(args, bookID)
+		}
+		if _, err := s.db.Exec(statement, args...); err != nil {
+			return fmt.Errorf("kunde inte ta bort bok %d: %w", bookID, err)
+		}
+	}
+	return nil
+}
+
+// RecordFailure sparar att en bok inte kunde importeras, så att en
+// automatisk synk inte försöker igen förrän filen ändras.
+func (s *Store) RecordFailure(failure model.ImportFailure) error {
+	_, err := s.db.Exec(`
+		INSERT INTO import_failures (source_path, title, reason, failed_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(source_path) DO UPDATE SET
+			title = excluded.title, reason = excluded.reason, failed_at = excluded.failed_at`,
+		failure.SourcePath, failure.Title, failure.Reason,
+		float64(failure.FailedAt.UnixNano())/1e9)
+	return err
+}
+
+// Failures listar de böcker som inte kunde importeras.
+func (s *Store) Failures() ([]model.ImportFailure, error) {
+	rows, err := s.db.Query("SELECT source_path, title, reason, failed_at FROM import_failures ORDER BY failed_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var failures []model.ImportFailure
+	for rows.Next() {
+		var failure model.ImportFailure
+		var failedAt float64
+		if err := rows.Scan(&failure.SourcePath, &failure.Title, &failure.Reason, &failedAt); err != nil {
+			return nil, err
+		}
+		failure.FailedAt = time.Unix(0, int64(failedAt*1e9))
+		failures = append(failures, failure)
+	}
+	return failures, rows.Err()
+}
+
+// ClearFailure tar bort en registrerad misslyckande, t.ex. när boken
+// lyckas importera vid ett senare försök.
+func (s *Store) ClearFailure(sourcePath string) error {
+	_, err := s.db.Exec("DELETE FROM import_failures WHERE source_path = ?", sourcePath)
+	return err
 }
 
 // FindBook söker en bok på titel, författare eller id.
