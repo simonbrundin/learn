@@ -52,31 +52,39 @@ onMounted(() => {
 <style scoped>
 .container {
   max-width: 600px;
-  margin: 2rem auto;
-  padding: 1rem;
+  margin: 2.4rem auto;
+  padding: 1.2rem 1.3rem;
+  background: #1a1e1b;
+  border: 1px solid #2a312b;
+  border-radius: 4px;
+  color: #f0efe9;
   font-family: system-ui, sans-serif;
 }
 
 h1 {
-  color: #333;
+  margin: 0;
+  font-family: Georgia, 'Iowan Old Style', serif;
+  font-weight: 400;
+  color: #f0efe9;
 }
 
 .loading {
-  color: #666;
+  color: #99a096;
 }
 
 .error {
-  color: #dc2626;
-  background: #fef2f2;
+  color: #e2a582;
+  background: rgba(201, 127, 90, 0.1);
+  border: 1px solid rgba(201, 127, 90, 0.35);
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .health-data {
-  background: #f0fdf4;
+  background: #212722;
   padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #86efac;
+  border-radius: 4px;
+  border: 1px solid #2a312b;
 }
 
 .health-data p {
@@ -86,14 +94,16 @@ h1 {
 button {
   margin-top: 1rem;
   padding: 0.5rem 1rem;
-  background: #2563eb;
-  color: white;
+  background: #c97f5a;
+  color: #16100c;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), background-color 120ms;
 }
 
 button:hover {
-  background: #1d4ed8;
+  background: #e2a582;
+  transform: translateY(-1px);
 }
 </style>

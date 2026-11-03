@@ -5,47 +5,56 @@
         <h1>Learn</h1>
         <p class="subtitle">Kunskapsbas från dina e-puber – koncept, grafer och quiz.</p>
       </div>
-      <div class="status" :class="{ error: error }">
+      <div class="status" :class="{ error: error }" role="status">
         {{ error ? 'Fel: ' + error : loading ? 'Laddar…' : 'Ansluten' }}
       </div>
     </header>
 
-    <div class="layout">
-      <aside class="panel">
-        <h2>Böcker</h2>
-        <ul v-if="books.length" class="books">
-          <li v-for="book in books" :key="book.id">
-            <button
-              class="book"
-              :class="{ active: book.id === selectedBookId }"
-              @click="selectBook(book.id)"
-            >
-              <span class="book-title">{{ book.title }}</span>
-              <span class="book-meta">{{ book.author || 'okänd författare' }}</span>
-            </button>
-          </li>
-        </ul>
-        <p v-else class="hint">
-          Inga böcker importerade ännu. Kör <code>learn import bok.epub</code> för att komma igång.
-        </p>
+    <div class="layout" :key="selectedBookId ?? 'none'">
+      <aside class="column">
+        <section class="card" :style="{ '--i': 0 }">
+          <h2>Böcker</h2>
+          <ul v-if="books.length" class="books">
+            <li v-for="book in books" :key="book.id">
+              <button
+                class="book"
+                :class="{ active: book.id === selectedBookId }"
+                @click="selectBook(book.id)"
+              >
+                <span class="book-title">{{ book.title }}</span>
+                <span class="book-meta">{{ book.author || 'okänd författare' }}</span>
+              </button>
+            </li>
+          </ul>
+          <p v-else class="hint">
+            Inga böcker importerade ännu. Kör <code>learn import bok.epub</code> för att komma igång.
+          </p>
+        </section>
 
-        <template v-if="selectedBook">
+        <section v-if="selectedBook" class="card" :style="{ '--i': 1 }">
           <h2>Koncept</h2>
           <p class="hint">{{ concepts.length }} koncept i boken</p>
           <ul class="concepts">
             <li v-for="concept in concepts" :key="concept.id">
-              <button class="concept" @click="explain(concept)">
+              <button
+                class="concept"
+                :class="{ active: selectedConcept?.id === concept.id }"
+                @click="explain(concept)"
+              >
                 <span class="concept-name">{{ concept.name }}</span>
-                <span class="bar" :style="{ width: Math.round(concept.importance * 100) + '%' }" />
+                <span class="concept-meta">{{ concept.importance.toFixed(2) }}</span>
+                <span class="bar">
+                  <i :style="{ width: Math.round(concept.importance * 100) + '%' }" />
+                </span>
               </button>
             </li>
           </ul>
-        </template>
+        </section>
       </aside>
 
-      <main class="panel">
+      <main class="column">
         <template v-if="selectedBook">
-          <section>
+          <section class="card" :style="{ '--i': 1 }">
             <h2>Kunskapsgraf</h2>
             <svg v-if="graph.nodes.length" class="graph" :viewBox="`0 0 ${graphWidth} ${graphHeight}`">
               <g>
@@ -57,16 +66,28 @@
                   :x2="positionOf(edge.target).x"
                   :y2="positionOf(edge.target).y"
                   :class="'edge ' + edge.relation"
+                  :style="{ '--i': index }"
                 >
                   <title>{{ edge.relation }} ({{ edge.weight }})</title>
                 </line>
               </g>
               <g v-for="node in graph.nodes" :key="node.id">
                 <circle
+                  v-if="node.id === strongestNodeId"
+                  :cx="positionOf(node.id).x"
+                  :cy="positionOf(node.id).y"
+                  :r="nodeRadius(node) + 10"
+                  class="halo"
+                />
+                <circle
                   :cx="positionOf(node.id).x"
                   :cy="positionOf(node.id).y"
                   :r="nodeRadius(node)"
-                  :class="'node ' + (selectedConcept?.id === node.id ? 'selected' : '')"
+                  :class="[
+                    'node',
+                    node.id === strongestNodeId ? 'strongest' : '',
+                    selectedConcept?.id === node.id ? 'selected' : '',
+                  ]"
                   @click="selectNode(node)"
                 >
                   <title>{{ node.name }}</title>
@@ -89,7 +110,7 @@
             </div>
           </section>
 
-          <section v-if="explanation">
+          <section v-if="explanation" :key="explanation.title" class="card" :style="{ '--i': 2 }">
             <h2>{{ explanation.title }}</h2>
             <p class="definition">{{ explanation.definition }}</p>
             <ul v-if="explanation.key_points?.length" class="points">
@@ -103,40 +124,48 @@
             </div>
           </section>
 
-          <section>
+          <section class="card" :style="{ '--i': 3 }">
             <h2>Ställ en fråga</h2>
             <form class="ask" @submit.prevent="ask">
-              <input v-model="question" type="text" placeholder="Vad är System 1?" />
+              <input
+                v-model="question"
+                type="text"
+                placeholder="Vad är System 1?"
+                aria-label="Fråga om bokens innehåll"
+              />
               <button type="submit" :disabled="asking">Fråga</button>
             </form>
             <pre v-if="answer" class="answer">{{ answer }}</pre>
           </section>
 
-          <section>
+          <section class="card" :style="{ '--i': 4 }">
             <h2>Kunskapstest</h2>
             <button class="primary" @click="loadQuiz" :disabled="quizLoading">
               {{ quiz.length ? 'Nya frågor' : 'Starta quiz' }}
             </button>
             <div v-if="quiz.length" class="quiz">
-              <article v-for="(question, index) in quiz" :key="question.id" class="question">
-                <p class="question-text">{{ index + 1 }}. {{ question.prompt }}</p>
-                <ol v-if="question.options?.length" class="options">
-                  <li v-for="(option, optionIndex) in question.options" :key="optionIndex">
-                    <button class="option" @click="answerQuestion(question, option)">
+              <article v-for="(item, index) in quiz" :key="item.id" class="question">
+                <p class="question-text">{{ index + 1 }}. {{ item.prompt }}</p>
+                <ol v-if="item.options?.length" class="options">
+                  <li v-for="(option, optionIndex) in item.options" :key="optionIndex">
+                    <button class="option" @click="answerQuestion(item, option)">
                       {{ option }}
                     </button>
                   </li>
                 </ol>
-                <p v-if="results[question.id]" class="result" :class="{ correct: results[question.id].correct }">
-                  {{ results[question.id].correct ? 'Rätt!' : 'Fel.' }}
-                  {{ results[question.id].explanation }}
+                <p v-if="results[item.id]" class="result" :class="{ correct: results[item.id].correct }">
+                  {{ results[item.id].correct ? 'Rätt!' : 'Fel.' }}
+                  {{ results[item.id].explanation }}
                 </p>
               </article>
             </div>
           </section>
         </template>
 
-        <p v-else class="hint">Välj en bok för att se dess kunskapsgraf.</p>
+        <section v-else class="card" :style="{ '--i': 0 }">
+          <h2>Kunskapsbas</h2>
+          <p class="hint">Välj en bok för att se dess kunskapsgraf.</p>
+        </section>
       </main>
     </div>
   </div>
@@ -213,6 +242,17 @@ const answer = ref('')
 const quiz = ref<Question[]>([])
 const quizLoading = ref(false)
 const results = ref<Record<number, { correct: boolean; explanation: string }>>({})
+
+// Noden med högst vikt får grafen enda pulserande markering.
+const strongestNodeId = computed(() => {
+  let best: GraphNode | null = null
+  for (const node of graph.value.nodes) {
+    if (!best || node.importance > best.importance) {
+      best = node
+    }
+  }
+  return best?.id ?? null
+})
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -367,12 +407,41 @@ onMounted(loadBooks)
 </script>
 
 <style scoped>
+/* ============================================================
+   A3 · Folio – djup oliv mark, terrakotta, serif genomgående.
+   Rörelse: 300ms enter · 40ms stagger · 120ms hover · 3s puls.
+   ============================================================ */
+
 .page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
-  color: #e5e7eb;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #121513;
+  --panel: #1a1e1b;
+  --panel-2: #212722;
+  --text: #f0efe9;
+  --text-dim: #99a096;
+  --accent: #c97f5a;
+  --accent-soft: #e2a582;
+  --line: #2a312b;
+  --line-strong: #3a423b;
+  --sage: #8fae86;
+  --radius: 4px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  padding: 2.4rem 1.6rem 5rem;
+}
+
+:global(body) {
+  margin: 0;
+  background: #121513;
+  color-scheme: dark;
 }
 
 .header {
@@ -380,69 +449,102 @@ onMounted(loadBooks)
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  max-width: 1240px;
+  margin: 0 auto 2rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--line);
 }
 
 h1 {
   margin: 0;
-  font-size: 1.8rem;
-  letter-spacing: -0.02em;
+  font-family: var(--serif);
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
 }
 
 h2 {
-  font-size: 0.78rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #94a3b8;
-  margin: 0 0 0.6rem;
+  color: var(--text-dim);
+  margin: 0 0 0.9rem;
 }
 
 .subtitle {
-  margin: 0.35rem 0 0;
-  color: #94a3b8;
+  margin: 0.3rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
 }
 
 .status {
-  font-size: 0.85rem;
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.1);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  padding: 0.25rem 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--sage);
+  border: 1px solid rgba(143, 174, 134, 0.35);
+  background: rgba(143, 174, 134, 0.08);
+  padding: 0.3rem 0.75rem;
   border-radius: 999px;
   white-space: nowrap;
 }
 
 .status.error {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.1);
-  border-color: rgba(248, 113, 113, 0.3);
+  color: var(--accent-soft);
+  background: rgba(201, 127, 90, 0.1);
+  border-color: rgba(201, 127, 90, 0.35);
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 1.5rem;
+  grid-template-columns: 272px 1fr;
+  gap: 1.4rem;
   align-items: start;
+  max-width: 1240px;
+  margin: 0 auto;
 }
 
-@media (max-width: 860px) {
+.column {
+  display: grid;
+  gap: 1.4rem;
+}
+
+@media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
   }
+
+  .page {
+    padding: 1.6rem 1rem 4rem;
+  }
 }
 
-.panel {
-  background: #111827;
-  border: 1px solid #1f2937;
-  border-radius: 14px;
-  padding: 1.1rem;
+/* ---------- Kort och inträde ---------- */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: rise 300ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
-aside.panel section + section,
-main.panel section + section {
-  margin-top: 1.8rem;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+/* ---------- Böcker ---------- */
 ul {
   list-style: none;
   margin: 0;
@@ -456,172 +558,294 @@ ul {
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
+  border-left: 2px solid transparent;
   color: inherit;
   padding: 0.5rem 0.6rem;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
   font: inherit;
+  transition: background-color 120ms var(--ease), border-color 120ms var(--ease),
+    transform 120ms var(--ease);
 }
 
 .books button:hover,
 .concept:hover {
-  background: #1f2937;
+  background: var(--panel-2);
+  border-left-color: var(--line-strong);
+  transform: translateY(-1px);
 }
 
 .book.active {
-  background: #1d4ed8;
-  color: #fff;
+  border-left-color: var(--accent);
+  background: var(--panel-2);
 }
 
 .book-title {
   display: block;
-  font-weight: 600;
+  font-family: var(--serif);
+  font-size: 1.02rem;
 }
 
 .book-meta {
   display: block;
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 0.1rem;
 }
 
-.book.active .book-meta {
-  color: #dbeafe;
+.book.active .book-title {
+  color: var(--accent);
+}
+
+/* ---------- Koncept ---------- */
+.hint {
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  margin: 0 0 0.7rem;
+}
+
+.hint code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
 }
 
 .concepts {
-  max-height: 320px;
+  max-height: 340px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.concept {
+  position: relative;
+  padding-right: 3rem;
+}
+
+.concept.active {
+  border-left-color: var(--accent);
+}
+
+.concept.active .concept-name {
+  color: var(--accent);
 }
 
 .concept-name {
   display: block;
-  font-size: 0.9rem;
+  font-family: var(--serif);
+  font-size: 0.96rem;
+}
+
+.concept-meta {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
 }
 
 .bar {
   display: block;
-  height: 3px;
-  margin-top: 4px;
-  background: #3b82f6;
-  border-radius: 2px;
-  min-width: 4px;
+  height: 2px;
+  margin-top: 5px;
+  background: var(--line);
+  overflow: hidden;
 }
 
-.hint {
-  color: #94a3b8;
-  font-size: 0.88rem;
+.bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: grow 420ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms + 120ms);
 }
 
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ---------- Graf ---------- */
 .graph {
   width: 100%;
   height: auto;
-  background: #0b1220;
-  border: 1px solid #1f2937;
-  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 
 .edge {
-  stroke: #334155;
-  stroke-width: 1.5;
+  stroke: var(--line-strong);
+  stroke-width: 1.4;
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+  animation: draw 520ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 25ms + 80ms);
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 .edge.contrast {
-  stroke: #f59e0b;
+  stroke: var(--accent);
 }
 
 .edge.cause,
 .edge.effect {
-  stroke: #34d399;
+  stroke: var(--sage);
+}
+
+.halo {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes halo {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.75;
+  }
+  70% {
+    transform: scale(2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .node {
-  fill: #1d4ed8;
-  stroke: #93c5fd;
+  fill: var(--sage);
+  stroke: var(--line-strong);
   stroke-width: 1.5;
   cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 120ms var(--ease), fill 120ms var(--ease);
+}
+
+.node:hover {
+  transform: scale(1.12);
+  fill: var(--accent-soft);
+}
+
+/* Starkaste noden markeras även utan rörelse, så stillbilden säger samma sak. */
+.node.strongest {
+  fill: var(--accent);
+  stroke: var(--accent-soft);
 }
 
 .node.selected {
-  fill: #f59e0b;
-  stroke: #fde68a;
+  fill: var(--accent-soft);
+  stroke: var(--accent);
 }
 
 .label {
-  fill: #cbd5f5;
+  fill: var(--text-dim);
   font-size: 10px;
   pointer-events: none;
 }
 
 .legend {
   display: flex;
-  gap: 1rem;
-  margin-top: 0.6rem;
-  font-size: 0.78rem;
-  color: #94a3b8;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .dot {
-  width: 10px;
+  width: 14px;
   height: 2px;
-  background: #334155;
+  background: var(--line-strong);
   display: inline-block;
 }
 
 .dot.contrast {
-  background: #f59e0b;
+  background: var(--accent);
 }
 
 .dot.cause,
 .dot.effect {
-  background: #34d399;
+  background: var(--sage);
 }
 
+/* ---------- Förklaring ---------- */
 .definition {
-  margin: 0 0 0.6rem;
-  line-height: 1.5;
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  line-height: 1.55;
+  margin: 0 0 0.7rem;
 }
 
 .points {
   margin: 0;
   padding-left: 1.1rem;
-  color: #cbd5f5;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .quote {
-  border-left: 3px solid #3b82f6;
+  border-left: 2px solid var(--accent);
   padding-left: 0.8rem;
-  color: #cbd5f5;
+  color: var(--text-dim);
+  font-family: var(--serif);
   font-style: italic;
-  margin: 0.8rem 0;
+  margin: 0.9rem 0;
 }
 
 .related {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
 }
 
 .chip {
   font-size: 0.78rem;
-  background: #1f2937;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 0.2rem 0.65rem;
+  padding: 0.2rem 0.7rem;
 }
 
 .chip em {
-  color: #94a3b8;
+  color: var(--accent);
   font-style: normal;
+  font-family: var(--mono);
+  font-size: 0.72rem;
 }
 
+/* ---------- Fråga ---------- */
 .ask {
   display: flex;
   gap: 0.5rem;
@@ -629,12 +853,18 @@ ul {
 
 .ask input {
   flex: 1;
-  background: #0b1220;
-  border: 1px solid #1f2937;
-  border-radius: 8px;
-  color: inherit;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
   padding: 0.55rem 0.7rem;
   font: inherit;
+  transition: border-color 120ms var(--ease);
+}
+
+.ask input:focus {
+  border-color: var(--accent);
 }
 
 button {
@@ -644,75 +874,125 @@ button {
 
 .ask button,
 .primary {
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: #16100c;
   border: none;
-  border-radius: 8px;
-  padding: 0.55rem 1rem;
+  border-radius: var(--radius);
+  padding: 0.55rem 1.1rem;
+  font-weight: 600;
+  transition: transform 120ms var(--ease), background-color 120ms var(--ease);
+}
+
+.ask button:hover:not(:disabled),
+.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: var(--accent-soft);
 }
 
 .ask button:disabled,
 .primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
+}
+
+.primary {
+  font-size: 0.88rem;
 }
 
 .answer {
   white-space: pre-wrap;
-  background: #0b1220;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
-  padding: 0.8rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.95rem;
+  font-family: var(--serif);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  margin: 0.8rem 0 0;
 }
 
+/* ---------- Quiz ---------- */
 .quiz {
-  margin-top: 0.8rem;
+  margin-top: 0.9rem;
   display: grid;
-  gap: 0.8rem;
+  gap: 0.9rem;
 }
 
 .question {
-  background: #0b1220;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
-  padding: 0.8rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
 }
 
 .question-text {
-  margin: 0 0 0.6rem;
-  font-weight: 600;
+  margin: 0 0 0.7rem;
+  font-family: var(--serif);
+  font-size: 1rem;
 }
 
 .options {
   margin: 0;
   padding-left: 1.2rem;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .option {
-  background: transparent;
-  border: 1px solid #1f2937;
-  color: #cbd5f5;
-  border-radius: 8px;
-  padding: 0.4rem 0.6rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.7rem;
   text-align: left;
   font: inherit;
+  transition: transform 120ms var(--ease), border-color 120ms var(--ease),
+    background-color 120ms var(--ease);
 }
 
 .option:hover {
-  border-color: #3b82f6;
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .result {
-  margin: 0.6rem 0 0;
-  font-size: 0.85rem;
-  color: #f87171;
+  margin: 0.7rem 0 0;
+  font-size: 0.88rem;
+  color: var(--accent-soft);
 }
 
 .result.correct {
-  color: #34d399;
+  color: var(--sage);
+}
+
+/* ---------- Fokus ---------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Reducerad rörelse ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .bar > i,
+  .edge {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .halo {
+    animation: none;
+    opacity: 0.3;
+  }
+
+  .books button,
+  .concept,
+  .node,
+  .option,
+  .ask button,
+  .primary {
+    transition: none;
+  }
 }
 </style>

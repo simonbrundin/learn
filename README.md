@@ -142,7 +142,8 @@ Interaktiv OpenAPI-dokumentation finns på `http://localhost:8080/docs/`.
 
 Nuxt-SPA:t i `src/nuxt` visar böcker, koncept, kunskapsgrafen (SVG), frågor
 och quiz. Det pratar med API:t via `/api/` – i produktion via nginx-proxy, i
-utveckling via Nuxts dev-proxy.
+utveckling via Nuxts dev-proxy. Gränssnittet följer designsystemet "A3 Folio"
+(djup mark, terrakotta, serif) med CSS-native rörelse – se AGENTS.md.
 
 ```bash
 # Terminal 1: API:t

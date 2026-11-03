@@ -667,6 +667,36 @@ utveckling används Nuxts `nitro.devProxy` mot `http://localhost:8080`.
 cd src/nuxt && bun run dev
 ```
 
+### Designsystem: A3 Folio
+
+Gränssnittet följer en validerad designriktning ("A3 Folio"): djup olivgrön
+markgrund, terrakotta som enda accent, Georgia som display-typ och
+mono-etiketter. Tokens ligger i `.page`-regeln i `app/pages/index.vue`.
+
+| Token | Värde | Användning |
+| ----- | ----- | ---------- |
+| `--bg` | `#121513` | Sidmark, graf, svar |
+| `--panel` | `#1a1e1b` | Kort och paneler |
+| `--panel-2` | `#212722` | Inmatningsfält, knappar, chips |
+| `--text` | `#f0efe9` | Brödtext |
+| `--text-dim` | `#99a096` | Etiketter och sekundärtext |
+| `--accent` | `#c97f5a` | Terrakotta: aktivt läge, kanter |
+| `--line` | `#2a312b` | Hårlinjer |
+
+Rörelsereglerna är del av designen – ändra dem inte utan att uppdatera
+beskrivningen här:
+
+| Rörelse | Värde |
+| ------- | ----- |
+| Inträde | 300 ms, `cubic-bezier(0.2, 0, 0, 1)`, `translateY(8px) → 0` |
+| Stagger | 40 ms per kort (`--i` sätts inline) |
+| Hover | 120 ms på transform och färg |
+| Kantritning | 520 ms `stroke-dashoffset` i grafen |
+| Puls/halo | 3 s loop på grafens starkaste nod |
+
+All rörelse är CSS-native (inga bibliotek) och slås av helt under
+`prefers-reduced-motion: reduce`.
+
 ### PostgreSQL (om lokal)
 
 ```bash
