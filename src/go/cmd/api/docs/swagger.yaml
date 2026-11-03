@@ -226,6 +226,33 @@ definitions:
       title:
         type: string
     type: object
+  model.BookInsight:
+    properties:
+      book:
+        $ref: '#/definitions/model.Book'
+      cross_links:
+        items:
+          $ref: '#/definitions/model.CrossLink'
+        type: array
+      novel:
+        items:
+          $ref: '#/definitions/model.NovelConcept'
+        type: array
+      relation_conflicts:
+        items:
+          $ref: '#/definitions/model.RelationConflict'
+        type: array
+      shared:
+        items:
+          $ref: '#/definitions/model.SharedConcept'
+        type: array
+      totals:
+        $ref: '#/definitions/model.InsightTotals'
+      unconventional:
+        items:
+          $ref: '#/definitions/model.UnconventionalConcept'
+        type: array
+    type: object
   model.Concept:
     properties:
       book_id:
@@ -255,6 +282,23 @@ definitions:
       summary:
         type: string
     type: object
+  model.CrossLink:
+    properties:
+      book_id:
+        type: integer
+      book_title:
+        type: string
+      concept:
+        type: string
+      keywords:
+        items:
+          type: string
+        type: array
+      other_concept:
+        type: string
+      strength:
+        type: number
+    type: object
   model.Idea:
     properties:
       basis:
@@ -268,6 +312,78 @@ definitions:
       kind:
         type: string
       prompt:
+        type: string
+    type: object
+  model.InsightTotals:
+    properties:
+      concepts:
+        description: Concepts är antalet koncept i boken.
+        type: integer
+      contradicting:
+        description: Contradicting är koncept som motsäger andra böckers beskrivning.
+        type: integer
+      coverage:
+        description: Coverage är andelen koncept som är unika, 0–1.
+        type: number
+      novel_keywords:
+        description: NovelKeywords är nyckelord som bara förekommer i boken.
+        type: integer
+      other_books:
+        description: OtherBooks är antalet böcker boken jämförs med.
+        type: integer
+      shared:
+        description: Shared är koncept som också förekommer i andra böcker.
+        type: integer
+      unconventional:
+        description: Unconventional är koncept vars beskrivning avviker från andra
+          böcker.
+        type: integer
+      unique:
+        description: Unique är koncept som bara finns i denna bok.
+        type: integer
+    type: object
+  model.LibraryInsight:
+    properties:
+      books:
+        type: integer
+      concepts:
+        type: integer
+      corpus_coverage:
+        type: number
+      distinct_names:
+        type: integer
+      generated_at:
+        type: string
+      most_shared:
+        items:
+          $ref: '#/definitions/model.SharedConcept'
+        type: array
+      most_unconventional:
+        items:
+          $ref: '#/definitions/model.UnconventionalConcept'
+        type: array
+      shared_names:
+        type: integer
+    type: object
+  model.NovelConcept:
+    properties:
+      definition:
+        type: string
+      importance:
+        type: number
+      keywords:
+        items:
+          type: string
+        type: array
+      mentions:
+        type: integer
+      name:
+        type: string
+      novel_keywords:
+        items:
+          type: string
+        type: array
+      summary:
         type: string
     type: object
   model.Question:
@@ -291,6 +407,79 @@ definitions:
           type: string
         type: array
       prompt:
+        type: string
+    type: object
+  model.RelationConflict:
+    properties:
+      book_id:
+        type: integer
+      book_title:
+        type: string
+      here_relation:
+        type: string
+      other_relation:
+        type: string
+      source:
+        type: string
+      target:
+        type: string
+    type: object
+  model.SharedConcept:
+    properties:
+      elsewhere:
+        items:
+          $ref: '#/definitions/model.SharedVersion'
+        type: array
+      here:
+        type: string
+      importance:
+        type: number
+      name:
+        type: string
+      novel_keywords:
+        items:
+          type: string
+        type: array
+      verdict:
+        type: string
+    type: object
+  model.SharedVersion:
+    properties:
+      book_id:
+        type: integer
+      book_title:
+        type: string
+      definition:
+        type: string
+      negated:
+        description: Negated är sant när den andra boken säger motsatsen.
+        type: boolean
+      similarity:
+        type: number
+      verdict:
+        description: Verdict är "consistent", "nuance" eller "unconventional".
+        type: string
+    type: object
+  model.UnconventionalConcept:
+    properties:
+      elsewhere:
+        items:
+          $ref: '#/definitions/model.SharedVersion'
+        type: array
+      here:
+        type: string
+      importance:
+        type: number
+      name:
+        type: string
+      note:
+        description: Note förklarar vad avvikelsen består av.
+        type: string
+      novel_keywords:
+        items:
+          type: string
+        type: array
+      verdict:
         type: string
     type: object
 info:
@@ -453,6 +642,31 @@ paths:
       summary: Generera idéer
       tags:
       - ideas
+  /books/{bookId}/insight:
+    get:
+      description: Returnerar vad boken tillför (nya koncept), vad som avviker från
+        hur samma koncept beskrivs i andra böcker, och korskopplingar till andra böckers
+        kunskap
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BookInsight'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Analysera boken mot kunskapsbasen
+      tags:
+      - knowledge
   /books/{bookId}/quiz:
     get:
       description: Returnerar frågor för boken, och genererar nya om inga finns
@@ -649,6 +863,24 @@ paths:
       summary: Hello world
       tags:
       - greeting
+  /insight:
+    get:
+      description: 'Returnerar en sammanfattning av hela biblioteket: hur många koncept
+        som delas mellan böcker och vilka beskrivningar som motsäger varandra'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.LibraryInsight'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Sammanfatta kunskapsbasen
+      tags:
+      - knowledge
   /questions/{questionId}/attempt:
     post:
       consumes:

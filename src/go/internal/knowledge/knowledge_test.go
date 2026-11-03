@@ -81,6 +81,40 @@ func TestExtractCollectsContexts(t *testing.T) {
 	}
 }
 
+func TestExtractSkipsGenericTerms(t *testing.T) {
+	episodes := []model.Episode{{
+		Title: "Notes",
+		Text: "Pro Tip: Install the package from Git. Key Terms: the build is ready. " +
+			"Gherkin is a language used to describe expected behaviors of an application.",
+	}}
+	extractor := NewConceptExtractor(10)
+	concepts := extractor.Extract(episodes, 1)
+	for _, concept := range concepts {
+		switch strings.ToLower(concept.Name) {
+		case "pro tip", "key terms", "build", "notes":
+			t.Fatalf("generiskt uttryck blev koncept: %q", concept.Name)
+		}
+	}
+	if _, ok := findConcept(concepts, "gherkin"); !ok {
+		t.Fatalf("hittade inte Gherkin bland %v", names(concepts))
+	}
+}
+
+func TestExtractStripsFootnoteNumbers(t *testing.T) {
+	episodes := []model.Episode{{
+		Title: "Libraries",
+		Text: "Ruby Capybara 17 is a popular acceptance testing tool in Ruby. " +
+			"Ruby ActiveRecord1 is a popular ORM in Ruby.",
+	}}
+	extractor := NewConceptExtractor(10)
+	concepts := extractor.Extract(episodes, 1)
+	for _, concept := range concepts {
+		if strings.Contains(concept.Name, "17") || strings.Contains(concept.Name, "ActiveRecord1") {
+			t.Fatalf("fotnotsmarkören finns kvar i %q", concept.Name)
+		}
+	}
+}
+
 func TestGraphLinksRelatedConcepts(t *testing.T) {
 	concepts, contexts := extract(t)
 	graph := NewGraph()

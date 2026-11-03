@@ -383,6 +383,16 @@ func (s *Store) Concepts(bookID int64) ([]model.Concept, error) {
 	return concepts, rows.Err()
 }
 
+// AllConcepts returnerar koncepten i hela databasen.
+func (s *Store) AllConcepts() ([]model.Concept, error) {
+	return s.Concepts(0)
+}
+
+// AllEdges returnerar alla relationer i databasen.
+func (s *Store) AllEdges() ([]model.Edge, error) {
+	return s.Edges(0)
+}
+
 // FindConcept söker ett koncept på namn.
 func (s *Store) FindConcept(name string, bookID int64) (model.Concept, bool) {
 	concepts, err := s.Concepts(bookID)

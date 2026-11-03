@@ -19,8 +19,10 @@ type Repository interface {
 	FindBook(query string) (*model.Book, error)
 	Chapters(bookID int64) ([]model.Chapter, error)
 	Concepts(bookID int64) ([]model.Concept, error)
+	AllConcepts() ([]model.Concept, error)
 	FindConcept(name string, bookID int64) (model.Concept, bool)
 	Edges(bookID int64) ([]model.Edge, error)
+	AllEdges() ([]model.Edge, error)
 	Questions(bookID int64) ([]model.Question, error)
 	LatestAttempt(questionID int64) (*model.Attempt, bool)
 

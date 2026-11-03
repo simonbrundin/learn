@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/simon/repo-template/internal/learn"
+	"github.com/simon/repo-template/internal/model"
 	"github.com/simon/repo-template/internal/store"
 	"github.com/simon/repo-template/internal/testutil"
 )
@@ -250,6 +251,53 @@ func TestIdeasEndpoint(t *testing.T) {
 	ideas := body["ideas"].([]any)
 	if len(ideas) == 0 {
 		t.Fatal("inga idéer genererades")
+	}
+}
+
+func TestBookInsightEndpoint(t *testing.T) {
+	router, repo := setup(t)
+
+	// En andra bok med ett koncept som också finns i den första.
+	second := model.Book{Title: "Second Book"}
+	if err := repo.AddBook(&second); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddConcepts([]model.Concept{
+		{BookID: second.ID, Name: "System 1", Definition: "System 1 is a different description entirely."},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder, body := request(t, router, http.MethodGet, "/books/1/insight", "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("oväntad status: %d", recorder.Code)
+	}
+	totals, ok := body["totals"].(map[string]any)
+	if !ok {
+		t.Fatalf("svaret saknar totals: %v", body)
+	}
+	if totals["concepts"].(float64) == 0 {
+		t.Error("totals saknar antalet koncept")
+	}
+	if _, ok := body["novel"]; !ok {
+		t.Error("svaret saknar nya koncept")
+	}
+	if _, ok := body["unconventional"]; !ok {
+		t.Error("svaret saknar avvikelser")
+	}
+}
+
+func TestLibraryInsightEndpoint(t *testing.T) {
+	router, _ := setup(t)
+	recorder, body := request(t, router, http.MethodGet, "/insight", "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("oväntad status: %d", recorder.Code)
+	}
+	if body["books"].(float64) != 1 {
+		t.Errorf("väntade 1 bok, fick %v", body["books"])
+	}
+	if body["distinct_names"].(float64) == 0 {
+		t.Error("saknar distinkta konceptnamn")
 	}
 }
 

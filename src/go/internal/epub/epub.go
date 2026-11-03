@@ -16,6 +16,8 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/simon/repo-template/internal/text"
+
 	"github.com/simon/repo-template/internal/model"
 )
 
@@ -161,6 +163,11 @@ func Parse(filePath string) (*Book, error) {
 		if len(blocks) == 0 && len(headings) == 0 {
 			continue
 		}
+		body := strings.Join(blocks, "\n\n")
+		if text.LooksLikeIndex(body) {
+			// Register och sökregister innehåller ingen kunskap.
+			continue
+		}
 		title := tocTitles[member]
 		if title == "" && len(headings) > 0 {
 			title = headings[0]
@@ -171,7 +178,7 @@ func Parse(filePath string) (*Book, error) {
 		episodes = append(episodes, model.Episode{
 			Index:  len(episodes),
 			Title:  title,
-			Text:   strings.Join(blocks, "\n\n"),
+			Text:   body,
 			Blocks: blocks,
 		})
 	}

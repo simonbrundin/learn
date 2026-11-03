@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/simon/repo-template/internal/analysis"
 	"github.com/simon/repo-template/internal/ideas"
 	"github.com/simon/repo-template/internal/knowledge"
 	"github.com/simon/repo-template/internal/learn"
@@ -40,6 +41,8 @@ func (h *Handlers) Register(r gin.IRouter) {
 	r.GET("/books/:bookId/graph", h.GetGraph)
 	r.GET("/books/:bookId/quiz", h.GetQuiz)
 	r.GET("/books/:bookId/ideas", h.GetIdeas)
+	r.GET("/books/:bookId/insight", h.GetBookInsight)
+	r.GET("/insight", h.GetLibraryInsight)
 	r.GET("/concepts/:conceptId/explain", h.ExplainConcept)
 	r.GET("/concepts/:conceptId/related", h.RelatedConcepts)
 	r.GET("/ask", h.Ask)
@@ -403,6 +406,49 @@ func (h *Handlers) GetIdeas(c *gin.Context) {
 		result = []model.Idea{}
 	}
 	c.JSON(http.StatusOK, IdeasResponse{Ideas: result})
+}
+
+// GetBookInsight godoc
+// @Summary		Analysera boken mot kunskapsbasen
+// @Description	Returnerar vad boken tillför (nya koncept), vad som avviker från hur samma koncept beskrivs i andra böcker, och korskopplingar till andra böckers kunskap
+// @Tags			knowledge
+// @Produce		json
+// @Param			bookId	path	int	true	"Bok-ID"
+// @Success		200	{object}	model.BookInsight
+// @Failure		404	{object}	ErrorResponse
+// @Router			/books/{bookId}/insight [get]
+func (h *Handlers) GetBookInsight(c *gin.Context) {
+	book, ok := h.resolveBook(c)
+	if !ok {
+		return
+	}
+	insight, err := analysis.Compare(book.ID, h.repo, analysis.DefaultOptions())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	if insight == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "boken hittades inte"})
+		return
+	}
+	c.JSON(http.StatusOK, insight)
+}
+
+// GetLibraryInsight godoc
+// @Summary		Sammanfatta kunskapsbasen
+// @Description	Returnerar en sammanfattning av hela biblioteket: hur många koncept som delas mellan böcker och vilka beskrivningar som motsäger varandra
+// @Tags			knowledge
+// @Produce		json
+// @Success		200	{object}	model.LibraryInsight
+// @Failure		500	{object}	ErrorResponse
+// @Router			/insight [get]
+func (h *Handlers) GetLibraryInsight(c *gin.Context) {
+	insight, err := analysis.Library(h.repo)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, insight)
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,36 @@
 
     <div class="layout" :key="selectedBookId ?? 'none'">
       <aside class="column">
+        <section v-if="library" class="card" :style="{ '--i': 0 }">
+          <h2>Kunskapsbasen</h2>
+          <div class="stats compact">
+            <div class="stat">
+              <span class="stat-value">{{ library.books }}</span>
+              <span class="stat-label">böcker</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ library.concepts }}</span>
+              <span class="stat-label">koncept</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">{{ library.distinct_names }}</span>
+              <span class="stat-label">unika begrepp</span>
+            </div>
+          </div>
+          <p class="hint">
+            {{ library.shared_names }} begrepp återfinns i flera böcker
+            ({{ Math.round(library.corpus_coverage * 100) }} % av alla).
+          </p>
+          <ul v-if="library.most_unconventional.length" class="insight-list">
+            <li v-for="item in library.most_unconventional.slice(0, 3)" :key="item.name">
+              <span class="insight-name">
+                {{ item.name }}
+                <em class="verdict" :class="item.verdict">{{ verdictLabel(item.verdict) }}</em>
+              </span>
+            </li>
+          </ul>
+        </section>
+
         <section class="card" :style="{ '--i': 0 }">
           <h2>Böcker</h2>
           <ul v-if="books.length" class="books">
@@ -108,6 +138,102 @@
                 <i class="dot" :class="relation" /> {{ relation }}
               </span>
             </div>
+          </section>
+
+          <section v-if="insightLoading && !insight" class="card" :style="{ '--i': 2 }">
+            <h2>Analys mot kunskapsbasen</h2>
+            <p class="hint">Jämför boken med resten av biblioteket…</p>
+          </section>
+
+          <section v-else-if="insight" class="card" :style="{ '--i': 2 }">
+            <h2>Analys mot kunskapsbasen</h2>
+            <div class="stats">
+              <div class="stat">
+                <span class="stat-value">{{ insight.totals.unique }}</span>
+                <span class="stat-label">nya koncept</span>
+              </div>
+              <div class="stat">
+                <span class="stat-value">{{ Math.round(insight.totals.coverage * 100) }}%</span>
+                <span class="stat-label">av boken är nytt</span>
+              </div>
+              <div class="stat" :class="{ warn: insight.totals.unconventional > 0 }">
+                <span class="stat-value">{{ insight.totals.unconventional }}</span>
+                <span class="stat-label">avvikelser</span>
+              </div>
+              <div class="stat" :class="{ warn: insight.totals.contradicting > 0 }">
+                <span class="stat-value">{{ insight.totals.contradicting }}</span>
+                <span class="stat-label">motsägelser</span>
+              </div>
+              <div class="stat">
+                <span class="stat-value">{{ insight.totals.novel_keywords }}</span>
+                <span class="stat-label">nya nyckelord</span>
+              </div>
+            </div>
+            <p class="hint">
+              Jämfört med {{ insight.totals.other_books }} andra böcker i biblioteket.
+            </p>
+
+            <nav class="tabs" role="tablist">
+              <button
+                v-for="tab in insightTabs"
+                :key="tab.id"
+                role="tab"
+                :aria-selected="insightTab === tab.id"
+                :class="{ active: insightTab === tab.id }"
+                @click="insightTab = tab.id"
+              >
+                {{ tab.label }}
+                <em>{{ tab.count }}</em>
+              </button>
+            </nav>
+
+            <ul v-if="insightTab === 'novel'" class="insight-list">
+              <li v-for="item in insight.novel" :key="item.name">
+                <span class="insight-name">{{ item.name }}</span>
+                <span v-if="item.definition" class="insight-text">{{ item.definition }}</span>
+                <span v-else-if="item.summary" class="insight-text">{{ item.summary }}</span>
+                <span v-if="item.novel_keywords.length" class="insight-tags">
+                  <i v-for="keyword in item.novel_keywords" :key="keyword">{{ keyword }}</i>
+                </span>
+              </li>
+              <li v-if="!insight.novel.length" class="hint">
+                Boken tillför inga helt nya koncept.
+              </li>
+            </ul>
+
+            <ul v-else-if="insightTab === 'unconventional'" class="insight-list">
+              <li v-for="item in insight.unconventional" :key="item.name">
+                <span class="insight-name">
+                  {{ item.name }}
+                  <em class="verdict" :class="item.verdict">{{ verdictLabel(item.verdict) }}</em>
+                </span>
+                <span v-if="item.note" class="insight-text">{{ item.note }}</span>
+                <span v-if="item.here" class="insight-here">Här: {{ item.here }}</span>
+                <span v-if="item.elsewhere?.length" class="insight-there">
+                  I {{ item.elsewhere[0].book_title }}: {{ item.elsewhere[0].definition }}
+                </span>
+              </li>
+              <li v-if="!insight.unconventional.length" class="hint">
+                Boken beskriver inget på ett sätt som avviker från övriga böcker.
+              </li>
+            </ul>
+
+            <ul v-else class="insight-list">
+              <li v-for="link in insight.cross_links" :key="link.concept + link.book_title">
+                <span class="insight-name">
+                  {{ link.concept }}
+                  <span v-if="link.other_concept" class="arrow">→</span>
+                  <span v-if="link.other_concept">{{ link.other_concept }}</span>
+                </span>
+                <span class="insight-text">i {{ link.book_title }}</span>
+                <span class="insight-tags">
+                  <i v-for="keyword in link.keywords" :key="keyword">{{ keyword }}</i>
+                </span>
+              </li>
+              <li v-if="!insight.cross_links.length" class="hint">
+                Inga korskopplingar hittades.
+              </li>
+            </ul>
           </section>
 
           <section v-if="explanation" :key="explanation.title" class="card" :style="{ '--i': 2 }">
@@ -221,6 +347,82 @@ interface Explanation {
   related: { name: string; relation: string }[]
 }
 
+interface InsightVersion {
+  book_id: number
+  book_title: string
+  definition: string
+  similarity: number
+  verdict: string
+  negated: boolean
+}
+
+interface InsightNovel {
+  name: string
+  definition: string
+  summary: string
+  importance: number
+  mentions: number
+  keywords: string[]
+  novel_keywords: string[]
+}
+
+interface InsightShared {
+  name: string
+  importance: number
+  here: string
+  elsewhere: InsightVersion[]
+  verdict: string
+  novel_keywords: string[]
+  note?: string
+}
+
+interface InsightLink {
+  concept: string
+  other_concept: string
+  book_id: number
+  book_title: string
+  keywords: string[]
+  strength: number
+}
+
+interface InsightConflict {
+  source: string
+  target: string
+  here_relation: string
+  other_relation: string
+  book_id: number
+  book_title: string
+}
+
+interface BookInsight {
+  book: Book
+  totals: {
+    concepts: number
+    unique: number
+    shared: number
+    unconventional: number
+    contradicting: number
+    novel_keywords: number
+    coverage: number
+    other_books: number
+  }
+  novel: InsightNovel[]
+  shared: InsightShared[]
+  unconventional: InsightShared[]
+  relation_conflicts: InsightConflict[]
+  cross_links: InsightLink[]
+}
+
+interface LibraryInsight {
+  books: number
+  concepts: number
+  distinct_names: number
+  shared_names: number
+  corpus_coverage: number
+  most_shared: InsightShared[]
+  most_unconventional: InsightShared[]
+}
+
 const graphWidth = 640
 const graphHeight = 420
 const relations = ['related', 'contrast', 'cause', 'effect']
@@ -242,6 +444,34 @@ const answer = ref('')
 const quiz = ref<Question[]>([])
 const quizLoading = ref(false)
 const results = ref<Record<number, { correct: boolean; explanation: string }>>({})
+const insight = ref<BookInsight | null>(null)
+const insightLoading = ref(false)
+const insightTab = ref<'novel' | 'unconventional' | 'links'>('novel')
+const library = ref<LibraryInsight | null>(null)
+
+// Flikarna visar ny kunskap, avvikelser och korskopplingar.
+const insightTabs = computed(() => {
+  const data = insight.value
+  return [
+    { id: 'novel' as const, label: 'Ny kunskap', count: data?.novel.length ?? 0 },
+    { id: 'unconventional' as const, label: 'Okonventionellt', count: data?.unconventional.length ?? 0 },
+    { id: 'links' as const, label: 'Kopplingar', count: data?.cross_links.length ?? 0 },
+  ]
+})
+
+// verdictLabel översätter bedömningen till svenska.
+function verdictLabel(verdict: string) {
+  switch (verdict) {
+    case 'contradiction':
+      return 'motsägelse'
+    case 'unconventional':
+      return 'avvikande'
+    case 'nuance':
+      return 'nyans'
+    default:
+      return 'i enlighet'
+  }
+}
 
 // Noden med högst vikt får grafen enda pulserande markering.
 const strongestNodeId = computed(() => {
@@ -269,8 +499,12 @@ async function loadBooks() {
   loading.value = true
   error.value = null
   try {
-    const response = await api<{ books: Book[] }>('/books')
+    const [response, libraryResponse] = await Promise.all([
+      api<{ books: Book[] }>('/books'),
+      api<LibraryInsight>('/insight').catch(() => null),
+    ])
     books.value = response.books
+    library.value = libraryResponse
     if (!selectedBookId.value && books.value.length) {
       await selectBook(books.value[0].id)
     }
@@ -288,6 +522,8 @@ async function selectBook(id: number) {
   answer.value = ''
   quiz.value = []
   results.value = {}
+  insight.value = null
+  insightTab.value = 'novel'
   try {
     const [conceptResponse, graphResponse] = await Promise.all([
       api<{ concepts: Concept[] }>(`/books/${id}/concepts?limit=40`),
@@ -297,6 +533,19 @@ async function selectBook(id: number) {
     graph.value = graphResponse
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Okänt fel'
+  }
+  await loadInsight(id)
+}
+
+// Analysen jämför boken med resten av kunskapsbasen.
+async function loadInsight(id: number) {
+  insightLoading.value = true
+  try {
+    insight.value = await api<BookInsight>(`/books/${id}/insight`)
+  } catch (e) {
+    insight.value = null
+  } finally {
+    insightLoading.value = false
   }
 }
 
@@ -796,6 +1045,182 @@ ul {
 .dot.cause,
 .dot.effect {
   background: var(--sage);
+}
+
+/* ---------- Analys mot kunskapsbasen ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  margin-bottom: 0.8rem;
+}
+
+.stat {
+  background: var(--panel);
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-value {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.stat.warn .stat-value {
+  color: var(--accent-soft);
+}
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stats.compact {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.stats.compact .stat-value {
+  font-size: 1.2rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.3rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.tabs button {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.tabs button:hover {
+  color: var(--text);
+}
+
+.tabs button.active {
+  color: var(--accent-soft);
+  border-bottom-color: var(--accent);
+}
+
+.tabs button em {
+  font-style: normal;
+  color: var(--text-dim);
+  margin-left: 0.35rem;
+}
+
+.insight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.insight-list li {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.insight-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.insight-name {
+  font-family: var(--serif);
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.insight-name .verdict {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  padding: 0.1rem 0.35rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.insight-name .verdict.contradiction {
+  color: var(--accent-soft);
+  border-color: rgba(201, 127, 90, 0.45);
+}
+
+.insight-name .verdict.unconventional {
+  color: var(--sage);
+  border-color: rgba(143, 174, 134, 0.4);
+}
+
+.insight-name .arrow {
+  color: var(--accent-soft);
+  margin: 0 0.3rem;
+}
+
+.insight-text {
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.insight-here,
+.insight-there {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.insight-here::before,
+.insight-there::before {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--line-strong);
+  margin-right: 0.4rem;
+}
+
+.insight-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.insight-tags i {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--sage);
+  border: 1px solid rgba(143, 174, 134, 0.3);
+  background: rgba(143, 174, 134, 0.07);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius);
 }
 
 /* ---------- Förklaring ---------- */

@@ -19,6 +19,21 @@ var genericTerms = map[string]bool{
 	"summary": true, "figure": true, "table": true, "example": true,
 	"note": true, "appendix": true, "preface": true, "foreword": true,
 	"acknowledgements": true, "contents": true, "index": true,
+	"pro tip": true, "caution": true, "warning": true, "tip": true,
+	"pitfall": true, "anti-pattern": true, "antipattern": true,
+	"key terms": true, "key term": true, "glossary": true, "faq": true,
+	"best practices": true, "getting started": true, "overview": true,
+	"further reading": true, "references": true, "troubleshooting": true,
+	"requirements": true, "prerequisites": true, "benefits": true,
+	"difficulty": true, "languages": true, "edition": true, "version": true,
+	"copyright": true, "introduction to": true, "background": true,
+	"step": true, "steps": true, "list": true, "review": true,
+}
+
+// scored är en term med sitt viktvärde.
+type scored struct {
+	key   string
+	score float64
 }
 
 // conceptCandidate är en potentiell term under uppbyggnad.
@@ -32,6 +47,9 @@ type conceptCandidate struct {
 type ConceptExtractor struct {
 	// MaxConcepts begränsar hur många koncept som behålls.
 	MaxConcepts int
+	// MinStrongConcepts är antalet tydliga begrepp som krävs innan
+	// svagare termer tas med.
+	MinStrongConcepts int
 
 	contexts map[string][]string
 }
@@ -41,7 +59,7 @@ func NewConceptExtractor(maxConcepts int) *ConceptExtractor {
 	if maxConcepts <= 0 {
 		maxConcepts = 60
 	}
-	return &ConceptExtractor{MaxConcepts: maxConcepts, contexts: map[string][]string{}}
+	return &ConceptExtractor{MaxConcepts: maxConcepts, MinStrongConcepts: 8, contexts: map[string][]string{}}
 }
 
 // Contexts returnerar meningarna där varje koncept nämns.
@@ -72,6 +90,16 @@ func (e *ConceptExtractor) Extract(episodes []model.Episode, bookID int64) []mod
 		}
 	}
 
+	profiles := map[string]caseProfile{}
+	for _, episode := range episodes {
+		for key, profile := range caseProfiles(episode.Text) {
+			merged := profiles[key]
+			merged.midCapital += profile.midCapital
+			merged.lower += profile.lower
+			profiles[key] = merged
+		}
+	}
+
 	candidates := map[string]*conceptCandidate{}
 
 	for index, episode := range episodes {
@@ -91,6 +119,10 @@ func (e *ConceptExtractor) Extract(episodes []model.Episode, bookID int64) []mod
 		}
 		for _, term := range candidateTerms(episode.Title) {
 			key := strings.ToLower(term)
+			if key == strings.ToLower(strings.TrimSpace(episode.Title)) {
+				// Rubriken i sig är ett avsnitt, inte ett begrepp.
+				continue
+			}
 			entry, ok := candidates[key]
 			if !ok {
 				entry = &conceptCandidate{}
@@ -104,10 +136,6 @@ func (e *ConceptExtractor) Extract(episodes []model.Episode, bookID int64) []mod
 		entry.name = e.canonicalName(key, entry.sentences, definitions)
 	}
 
-	type scored struct {
-		key   string
-		score float64
-	}
 	var ranked []scored
 	maxMentions := 1
 	for _, entry := range candidates {
@@ -116,7 +144,7 @@ func (e *ConceptExtractor) Extract(episodes []model.Episode, bookID int64) []mod
 		}
 	}
 	for key, entry := range candidates {
-		ranked = append(ranked, scored{key: key, score: e.score(key, entry, definitions, headings, globalCounts, maxMentions)})
+		ranked = append(ranked, scored{key: key, score: e.score(key, entry, definitions, headings, globalCounts, maxMentions, profiles[key])})
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].score != ranked[j].score {
@@ -124,6 +152,7 @@ func (e *ConceptExtractor) Extract(episodes []model.Episode, bookID int64) []mod
 		}
 		return ranked[i].key < ranked[j].key
 	})
+	ranked = e.preferStrongConcepts(ranked, definitions, profiles)
 	if len(ranked) > e.MaxConcepts {
 		ranked = ranked[:e.MaxConcepts]
 	}
@@ -226,6 +255,7 @@ func (e *ConceptExtractor) score(
 	headings map[string]bool,
 	globalCounts map[string]int,
 	maxMentions int,
+	profile caseProfile,
 ) float64 {
 	mentionsScore := float64(entry.mentions) / float64(maxMentions)
 	definitionScore := 0.0
@@ -244,7 +274,15 @@ func (e *ConceptExtractor) score(
 	if frequency > 1 {
 		frequency = 1
 	}
-	return 0.4*mentionsScore + 0.3*definitionScore + 0.15*headingScore + 0.15*frequency
+	// Begrepp som skrivs med versal mitt i texten är sannolikt riktiga
+	// termer, medan vanliga ord oftast bara har versal när de inleder
+	// en mening.
+	termScore := 0.0
+	if profile.midCapital > 0 {
+		termScore = 1
+	}
+	return 0.3*mentionsScore + 0.25*definitionScore + 0.15*headingScore +
+		0.15*frequency + 0.15*termScore
 }
 
 // candidateTerms hittar möjliga konceptnamn i en text.
@@ -276,7 +314,42 @@ func cleanTerm(term string) string {
 	if len(words) == 0 || len(words) > 5 {
 		return ""
 	}
-	if genericTerms[strings.ToLower(words[0])] {
+	if genericTerms[strings.ToLower(strings.Join(words, " "))] || genericTerms[strings.ToLower(words[0])] {
+		return ""
+	}
+	if len(words) == 1 && text.GenericWords[strings.ToLower(words[0])] {
+		return ""
+	}
+	// Släpp fotnotsmarkörer i slutet, till exempel "Ruby Capybara 17".
+	for len(words) > 1 {
+		last := words[len(words)-1]
+		digits := 0
+		for _, r := range last {
+			if r >= '0' && r <= '9' {
+				digits++
+			}
+		}
+		if digits == len([]rune(last)) && digits > 1 {
+			words = words[:len(words)-1]
+			continue
+		}
+		break
+	}
+	// Siffror direkt på ordet är fotnotsmarkörer, till exempel "ActiveRecord1".
+	if len(words) > 0 {
+		last := words[len(words)-1]
+		trimmed := strings.TrimRight(last, "0123456789")
+		if trimmed != last && trimmed != "" {
+			words[len(words)-1] = trimmed
+		}
+	}
+	// Böjningsformer med genitiv-s är sällan begrepp.
+	joined := strings.ToLower(strings.Join(words, " "))
+	if strings.HasSuffix(joined, "'s") || strings.HasSuffix(joined, "’s") {
+		return ""
+	}
+	// Kontraktioner som "I've" är aldrig begrepp.
+	if strings.ContainsAny(joined, "'’") {
 		return ""
 	}
 	allStop := true
@@ -295,6 +368,98 @@ func cleanTerm(term string) string {
 	return strings.Join(words, " ")
 }
 
+// caseProfile beskriver hur en term skrivs i texten.
+type caseProfile struct {
+	// midCapital är antalet gånger termen förekommer med versal mitt i
+	// en mening, vilket tyder på att den är ett riktigt begrepp.
+	midCapital int
+	// lower är antalet gånger termen förekommer med gemener.
+	lower int
+}
+
+// caseProfiles räknar hur varje ord skrivs i texten.
+func caseProfiles(source string) map[string]caseProfile {
+	profiles := map[string]caseProfile{}
+	for _, sentence := range text.Sentences(source) {
+		words := strings.Fields(sentence)
+		for index, word := range words {
+			core := strings.Trim(word, ".,;:!?()[]\"'“”–—")
+			if core == "" {
+				continue
+			}
+			key := strings.ToLower(core)
+			profile := profiles[key]
+			switch {
+			case index == 0:
+				// Meningsstart ger ingen information om hur termen skrivs.
+			case isCapitalized(core):
+				profile.midCapital++
+			case isLowercase(core):
+				profile.lower++
+			}
+			profiles[key] = profile
+		}
+	}
+	return profiles
+}
+
+// isCapitalized svarar på om ordet börjar med versal.
+func isCapitalized(word string) bool {
+	runes := []rune(word)
+	if len(runes) == 0 {
+		return false
+	}
+	return runes[0] >= 'A' && runes[0] <= 'Z'
+}
+
+// isLowercase svarar på om ordet börjar med gemena.
+func isLowercase(word string) bool {
+	runes := []rune(word)
+	if len(runes) == 0 {
+		return false
+	}
+	return runes[0] >= 'a' && runes[0] <= 'z'
+}
+
+// preferStrongConcepts sorterar bort termer som bara är vanliga ord i
+// början av en mening, så länge boken har tillräckligt många tydliga
+// begrepp.
+func (e *ConceptExtractor) preferStrongConcepts(
+	ranked []scored,
+	definitions map[string]text.Definition,
+	profiles map[string]caseProfile,
+) []scored {
+	var strong, weak []scored
+	for _, item := range ranked {
+		if isStrongConcept(item.key, definitions, profiles) {
+			strong = append(strong, item)
+			continue
+		}
+		weak = append(weak, item)
+	}
+	if len(strong) < e.MinStrongConcepts {
+		return ranked
+	}
+	return strong
+}
+
+// isStrongConcept svarar på om en term är ett begrepp: den har en
+// definition eller skrivs alltid med versal, vilket tyder på ett
+// eget begrepp snarare än ett vanligt ord.
+func isStrongConcept(key string, definitions map[string]text.Definition, profiles map[string]caseProfile) bool {
+	if _, ok := definitions[key]; ok {
+		return true
+	}
+	for _, word := range strings.Fields(key) {
+		profile, ok := profiles[strings.ToLower(word)]
+		if ok && profile.midCapital > 0 && profile.lower == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// round avrundar till given decimal.
 func round(value float64, decimals int) float64 {
 	factor := 1.0
 	for i := 0; i < decimals; i++ {

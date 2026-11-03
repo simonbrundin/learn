@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/simon/repo-template/internal/analysis"
 	"github.com/simon/repo-template/internal/calibre"
 	"github.com/simon/repo-template/internal/ideas"
 	"github.com/simon/repo-template/internal/learn"
@@ -50,6 +51,8 @@ func main() {
 		code = cmdImport(rest, st)
 	case "sync":
 		code = cmdSync(rest, st)
+	case "compare":
+		code = cmdCompare(rest, st)
 	case "list":
 		code = cmdList(rest, st)
 	case "show":
@@ -83,6 +86,7 @@ func usage() {
 Kommandon:
   import <fil.epub>        Importera en e-pub-fil
   sync                    Synka böcker från Calibre (--watch kör om automatiskt)
+  compare [bok]           Jämför en bok med resten av kunskapsbasen
   list                     Lista importerade böcker
   show [bok]               Visa en bok i detalj
   ask "<fråga>"            Fråga kunskapsbasen
@@ -152,7 +156,7 @@ func parseGlobalFlags(args []string) (string, []string) {
 
 func cmdImport(args []string, st *store.Store) int {
 	fs := flag.NewFlagSet("import", flag.ExitOnError)
-	maxConcepts := fs.Int("max-concepts", 60, "max antal koncept per bok")
+	maxConcepts := fs.Int("max-concepts", 120, "max antal koncept per bok")
 	positional, err := parseFlags(fs, args)
 	if err != nil {
 		return 1
@@ -178,8 +182,23 @@ func cmdImport(args []string, st *store.Store) int {
 	}
 	fmt.Println()
 	fmt.Printf("Hittade %d koncept\n", len(result.Concepts))
+	printContribution(st, result.Book)
 	fmt.Printf("Sparat i %s\n", st.Path())
 	return 0
+}
+
+// printContribution visar kort vad boken tillför den samlade kunskapsbasen.
+func printContribution(st *store.Store, book model.Book) {
+	insight, err := analysis.Compare(book.ID, st, analysis.DefaultOptions())
+	if err != nil || insight == nil {
+		return
+	}
+	if insight.Totals.OtherBooks == 0 {
+		return
+	}
+	fmt.Printf("Tillför: %d nya koncept (%.0f%%), %d delade, %d avvikelser varav %d motsägelser\n",
+		insight.Totals.Unique, insight.Totals.Coverage*100,
+		insight.Totals.Shared, insight.Totals.Unconventional, insight.Totals.Contradicting)
 }
 
 // cmdSync importerar böcker från Calibre-biblioteket. Med --watch körs
@@ -189,7 +208,7 @@ func cmdSync(args []string, st *store.Store) int {
 	library := fs.String("library", "", "Calibre-biblioteket (default: $LEARN_CALIBRE_LIBRARY eller ~/calibre)")
 	watch := fs.Bool("watch", false, "kör synken om med jämna mellanrum")
 	interval := fs.Duration("interval", 10*time.Minute, "intervall mellan synkar vid --watch")
-	maxConcepts := fs.Int("max-concepts", 60, "max antal koncept per bok")
+	maxConcepts := fs.Int("max-concepts", 120, "max antal koncept per bok")
 	limit := fs.Int("limit", 0, "max antal böcker per körning (0 = alla)")
 	maxSize := fs.Int("max-file-size", 150, "max filstorlek i MB (0 = ingen gräns)")
 	refresh := fs.Bool("refresh", false, "importera om redan importerade böcker")
@@ -254,6 +273,99 @@ func cmdSync(args []string, st *store.Store) int {
 		}
 	}
 	return 0
+}
+
+// cmdCompare visar vad en bok tillför kunskapsbasen och var den avviker
+// från övrig kunskap.
+func cmdCompare(args []string, st *store.Store) int {
+	fs := flag.NewFlagSet("compare", flag.ExitOnError)
+	limit := fs.Int("limit", 10, "antal koncept per kategori")
+	positional, err := parseFlags(fs, args)
+	if err != nil {
+		return 1
+	}
+	book, ok := resolveBook(st, positional[0])
+	if !ok {
+		return 1
+	}
+
+	insight, err := analysis.Compare(book.ID, st, analysis.Options{
+		MaxNovel:  *limit,
+		MaxShared: *limit,
+		MaxLinks:  *limit,
+	})
+	if err != nil {
+		fmt.Println("Fel:", err)
+		return 1
+	}
+	if insight == nil {
+		fmt.Println("Kunde inte analysera boken.")
+		return 1
+	}
+
+	fmt.Println(insight.Book.Title)
+	if insight.Book.Author != "" {
+		fmt.Printf("– %s\n", insight.Book.Author)
+	}
+	fmt.Printf("%d koncept: %d nya (%.0f%%), %d som också finns i andra böcker\n",
+		insight.Totals.Concepts, insight.Totals.Unique,
+		insight.Totals.Coverage*100, insight.Totals.Shared)
+	if insight.Totals.Unconventional > 0 {
+		fmt.Printf("%d avvikelser, varav %d motsägelser\n",
+			insight.Totals.Unconventional, insight.Totals.Contradicting)
+	}
+	if insight.Totals.NovelKeywords > 0 {
+		fmt.Printf("%d nyckelord som bara förekommer i boken\n", insight.Totals.NovelKeywords)
+	}
+
+	if len(insight.Novel) > 0 {
+		fmt.Println()
+		fmt.Println("Ny kunskap:")
+		for _, novel := range insight.Novel {
+			fmt.Printf("  %-32s vikt %.2f  %s\n", novel.Name, novel.Importance, snippet(novel.Definition))
+		}
+	}
+
+	if len(insight.Unconventional) > 0 {
+		fmt.Println()
+		fmt.Println("Okonventionellt jämfört med övrig kunskap:")
+		for _, item := range insight.Unconventional {
+			fmt.Printf("  %s – %s\n", item.Name, item.Note)
+			fmt.Printf("    här: %s\n", snippet(item.Here))
+			if len(item.Elsewhere) > 0 {
+				fmt.Printf("    i %s: %s\n", item.Elsewhere[0].BookTitle, snippet(item.Elsewhere[0].Definition))
+			}
+		}
+	}
+
+	if len(insight.RelationConflicts) > 0 {
+		fmt.Println()
+		fmt.Println("Relationer som betyder olika i olika böcker:")
+		for _, conflict := range insight.RelationConflicts {
+			fmt.Printf("  %s → %s: %s här, %s i %s\n", conflict.Source, conflict.Target,
+				conflict.HereRelation, conflict.OtherRelation, conflict.BookTitle)
+		}
+	}
+
+	if len(insight.CrossLinks) > 0 {
+		fmt.Println()
+		fmt.Println("Kopplingar till andra böcker:")
+		for _, link := range insight.CrossLinks {
+			fmt.Printf("  %-22s → %-22s i %s (%s)\n", link.Concept, link.OtherConcept,
+				link.BookTitle, strings.Join(link.Keywords, ", "))
+		}
+	}
+	return 0
+}
+
+// snippet kortar en text till en rad.
+func snippet(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	runes := []rune(value)
+	if len(runes) <= 72 {
+		return value
+	}
+	return string(runes[:72]) + "…"
 }
 
 func cmdList(args []string, st *store.Store) int {

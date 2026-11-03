@@ -294,6 +294,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/books/{bookId}/insight": {
+            "get": {
+                "description": "Returnerar vad boken tillför (nya koncept), vad som avviker från hur samma koncept beskrivs i andra böcker, och korskopplingar till andra böckers kunskap",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "summary": "Analysera boken mot kunskapsbasen",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Bok-ID",
+                        "name": "bookId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BookInsight"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/books/{bookId}/quiz": {
             "get": {
                 "description": "Returnerar frågor för boken, och genererar nya om inga finns",
@@ -537,6 +572,32 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/insight": {
+            "get": {
+                "description": "Returnerar en sammanfattning av hela biblioteket: hur många koncept som delas mellan böcker och vilka beskrivningar som motsäger varandra",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "summary": "Sammanfatta kunskapsbasen",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.LibraryInsight"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/api.ErrorResponse"
                         }
                     }
                 }
@@ -941,6 +1002,47 @@ const docTemplate = `{
                 }
             }
         },
+        "model.BookInsight": {
+            "type": "object",
+            "properties": {
+                "book": {
+                    "$ref": "#/definitions/model.Book"
+                },
+                "cross_links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.CrossLink"
+                    }
+                },
+                "novel": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.NovelConcept"
+                    }
+                },
+                "relation_conflicts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.RelationConflict"
+                    }
+                },
+                "shared": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SharedConcept"
+                    }
+                },
+                "totals": {
+                    "$ref": "#/definitions/model.InsightTotals"
+                },
+                "unconventional": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.UnconventionalConcept"
+                    }
+                }
+            }
+        },
         "model.Concept": {
             "type": "object",
             "properties": {
@@ -985,6 +1087,32 @@ const docTemplate = `{
                 }
             }
         },
+        "model.CrossLink": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "book_title": {
+                    "type": "string"
+                },
+                "concept": {
+                    "type": "string"
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "other_concept": {
+                    "type": "string"
+                },
+                "strength": {
+                    "type": "number"
+                }
+            }
+        },
         "model.Idea": {
             "type": "object",
             "properties": {
@@ -1004,6 +1132,110 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "prompt": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.InsightTotals": {
+            "type": "object",
+            "properties": {
+                "concepts": {
+                    "description": "Concepts är antalet koncept i boken.",
+                    "type": "integer"
+                },
+                "contradicting": {
+                    "description": "Contradicting är koncept som motsäger andra böckers beskrivning.",
+                    "type": "integer"
+                },
+                "coverage": {
+                    "description": "Coverage är andelen koncept som är unika, 0–1.",
+                    "type": "number"
+                },
+                "novel_keywords": {
+                    "description": "NovelKeywords är nyckelord som bara förekommer i boken.",
+                    "type": "integer"
+                },
+                "other_books": {
+                    "description": "OtherBooks är antalet böcker boken jämförs med.",
+                    "type": "integer"
+                },
+                "shared": {
+                    "description": "Shared är koncept som också förekommer i andra böcker.",
+                    "type": "integer"
+                },
+                "unconventional": {
+                    "description": "Unconventional är koncept vars beskrivning avviker från andra böcker.",
+                    "type": "integer"
+                },
+                "unique": {
+                    "description": "Unique är koncept som bara finns i denna bok.",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.LibraryInsight": {
+            "type": "object",
+            "properties": {
+                "books": {
+                    "type": "integer"
+                },
+                "concepts": {
+                    "type": "integer"
+                },
+                "corpus_coverage": {
+                    "type": "number"
+                },
+                "distinct_names": {
+                    "type": "integer"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "most_shared": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SharedConcept"
+                    }
+                },
+                "most_unconventional": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.UnconventionalConcept"
+                    }
+                },
+                "shared_names": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.NovelConcept": {
+            "type": "object",
+            "properties": {
+                "definition": {
+                    "type": "string"
+                },
+                "importance": {
+                    "type": "number"
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mentions": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "novel_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "summary": {
                     "type": "string"
                 }
             }
@@ -1039,6 +1271,116 @@ const docTemplate = `{
                     }
                 },
                 "prompt": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RelationConflict": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "book_title": {
+                    "type": "string"
+                },
+                "here_relation": {
+                    "type": "string"
+                },
+                "other_relation": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.SharedConcept": {
+            "type": "object",
+            "properties": {
+                "elsewhere": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SharedVersion"
+                    }
+                },
+                "here": {
+                    "type": "string"
+                },
+                "importance": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "novel_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "verdict": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.SharedVersion": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "book_title": {
+                    "type": "string"
+                },
+                "definition": {
+                    "type": "string"
+                },
+                "negated": {
+                    "description": "Negated är sant när den andra boken säger motsatsen.",
+                    "type": "boolean"
+                },
+                "similarity": {
+                    "type": "number"
+                },
+                "verdict": {
+                    "description": "Verdict är \"consistent\", \"nuance\" eller \"unconventional\".",
+                    "type": "string"
+                }
+            }
+        },
+        "model.UnconventionalConcept": {
+            "type": "object",
+            "properties": {
+                "elsewhere": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SharedVersion"
+                    }
+                },
+                "here": {
+                    "type": "string"
+                },
+                "importance": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "note": {
+                    "description": "Note förklarar vad avvikelsen består av.",
+                    "type": "string"
+                },
+                "novel_keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "verdict": {
                     "type": "string"
                 }
             }

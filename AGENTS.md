@@ -630,7 +630,8 @@ Databasen ligger i `~/.learn/learn.db` (overridable via `LEARN_DB` eller `--db`)
 Paketen: `internal/epub` (parsning), `internal/text` (textanalys),
 `internal/knowledge` (koncept + graf), `internal/learning` (quiz + förklaringar),
 `internal/ideas` (idéer), `internal/store` (SQLite + `Repository`-gränssnitt),
-`internal/learn` (pipeline), `internal/api` (HTTP-handlare).
+`internal/learn` (pipeline), `internal/api` (HTTP-handlare),
+`internal/analysis` (jämförelse mot kunskapsbasen).
 
 ### REST-API (Learn)
 
@@ -656,6 +657,30 @@ curl -X POST localhost:8080/questions/1/attempt \
 OpenAPI-specen genereras med `swag init -g cmd/api/main.go -o cmd/api/docs
 --parseFuncBody` och visas i Scalar UI på `/docs/`. En ny endpoint måste ha
 swaggo-kommentarer (se AGENTS.md ovan).
+
+### Analys mot kunskapsbasen (Learn)
+
+`internal/analysis` jämför en bok med resten av biblioteket och svarar på vad
+boken tillför och var den avviker. Den används av CLI-kommandot `learn
+compare`, av `GET /books/{id}/insight` och av `GET /insight` (bibliotekets
+sammandrag).
+
+Fyra signaler används: konceptnamn (samma term = samma kunskap),
+definitionslikhet (Jaccard över innehållsord), negationer ("inte", "never",
+"unlike" → motsägelse) och nyckelord (nya ord + korskopplingar mellan böcker).
+
+| Bedömning | Tröskel | Betydelse |
+| --------- | ------- | --------- |
+| `consistent` | ≥ 0,70 likhet | Samma uppfattning |
+| `nuance` | 0,35–0,70 | Annan vinkel på samma sak |
+| `unconventional` | < 0,35 | Beskrivningen avviker tydligt |
+| `contradiction` | negation | Boken säger motsatsen |
+
+Kvaliteten på koncepten styr analysens kvalitet. Extraktorn i
+`internal/knowledge` filtrerar bort generiska termer (se
+`text.GenericWords`), kod som definitioner (`text.looksLikeProse`) och ord
+som bara förekommer med versal i början av en mening. Ändra inte listorna
+utan att köra `go test ./...` – de är del av analysens signal.
 
 ### Nuxt-SPA:t
 

@@ -171,6 +171,8 @@ func TestCLISyncImportsCalibreLibrary(t *testing.T) {
 func TestCLIUnknownCommand(t *testing.T) {
 	binary := buildCLI(t)
 	command := exec.Command(binary, "finns-inte")
+	// Testet ska inte röra den delade standarddatabasen.
+	command.Env = append(os.Environ(), "LEARN_DB="+filepath.Join(t.TempDir(), "unknown.db"))
 	output, err := command.CombinedOutput()
 	if err == nil {
 		t.Fatal("väntade fel för okänt kommando")

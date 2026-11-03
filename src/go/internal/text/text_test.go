@@ -40,6 +40,28 @@ func TestFindDefinitions(t *testing.T) {
 	}
 }
 
+func TestFindDefinitionsSkipsCode(t *testing.T) {
+	definitions := FindDefinitions("Given: @ruletag Rule : Scenarios can be organized into rules Given the user navigates", 5)
+	for _, definition := range definitions {
+		if definition.Term == "Given" {
+			t.Fatalf("kod togs som definition: %+v", definition)
+		}
+	}
+}
+
+func TestGenericWordsCoverCommonNoise(t *testing.T) {
+	for _, word := range []string{"given", "build", "system", "test", "value", "result"} {
+		if !GenericWords[word] {
+			t.Errorf("ordet %q borde finnas i GenericWords", word)
+		}
+	}
+	for _, word := range []string{"attention", "gherkin", "devops", "jenkins"} {
+		if GenericWords[word] {
+			t.Errorf("ordet %q ska inte finnas i GenericWords", word)
+		}
+	}
+}
+
 func TestFindQuotesUsesMarkers(t *testing.T) {
 	quotes := FindQuotes(sample, 5)
 	found := false
@@ -80,4 +102,18 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func TestLooksLikeIndex(t *testing.T) {
+	index := strings.Repeat("term 12, another 345, third 67, ", 400)
+	if !LooksLikeIndex(index) {
+		t.Error("indextexten upptäcktes inte")
+	}
+	prose := strings.Repeat("System 1 is fast and automatic thinking. ", 400)
+	if LooksLikeIndex(prose) {
+		t.Error("brödtext upptäcktes som index")
+	}
+	if LooksLikeIndex("Kort text 12") {
+		t.Error("kort text ska aldrig räknas som index")
+	}
 }

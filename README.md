@@ -189,18 +189,63 @@ Interaktiv OpenAPI-dokumentation finns på `http://localhost:8080/docs/`.
 | `GET /books/{id}/graph` | Noder och relationer för visualisering |
 | `GET /books/{id}/quiz?count=&kinds=&regenerate=` | Frågor (genereras vid behov) |
 | `GET /books/{id}/ideas?seed=&limit=` | Idégenerering |
+| `GET /books/{id}/insight` | Analys: vad boken tillför och var den avviker |
+| `GET /insight` | Sammanfattning av hela kunskapsbasen |
 | `GET /concepts/{id}/explain?level=` | Nivåanpassad förklaring |
 | `GET /concepts/{id}/related?limit=` | Grannar i grafen |
 | `GET /ask?q=&bookId=` | Svar på en fråga |
 | `GET /connect?from=&to=&bookId=` | Kopplingsväg mellan koncept |
 | `POST /questions/{id}/attempt` | Registrera svar och uppdatera SM-2-planen |
 
+## Analys mot kunskapsbasen
+
+Varje importerad bok kan jämföras med resten av biblioteket. Analysen svarar
+på två frågor: **vad tillför boken** som inte fanns tidigare, och **var
+beskriver boken något på ett sätt som avviker** från hur samma koncept
+beskrivs i andra böcker.
+
+```bash
+$ ./learn compare "The Cucumber Field Guide"
+The Cucumber Field Guide: Practical Examples for Automated Software Testing
+– Steven Hunt
+120 koncept: 41 nya (34%), 79 som också finns i andra böcker
+79 avvikelser, varav 11 motsägelser
+107 nyckelord som bara förekommer i boken
+
+Ny kunskap:
+  Gherkin                          vikt 0.62  a Domain-Specific Language (DSL) …
+  Scenario Outlines                vikt 0.51  Gherkin supports scenario outlines …
+
+Okonventionellt jämfört med övrig kunskap:
+  Scenario – Beskrivningen skiljer sig från Effective Java (12% likhet)
+    här: A scenario within a rule Given the user navigates to the home page
+    i Effective Java, Third Edition: Foreword Preface Acknowledgments …
+```
+
+Samma analys finns över HTTP (`GET /books/{id}/insight`) och i SPA:t under
+**Analys mot kunskapsbasen**, där ny kunskap, avvikelser och korskopplingar
+visas i varsin flik.
+
+Analysen bygger på fyra signaler:
+
+| Signal | Vad den mäter |
+| --- | --- |
+| Konceptnamn | Samma term i två böcker = samma kunskap, olika termer = nytt |
+| Definitionslikhet | Hur lika två böckers beskrivningar av samma term är |
+| Negationer | Om boken säger motsatsen mot övriga böcker |
+| Nyckelord | Vilka ord som bara förekommer i boken, och korskopplingar mellan böcker |
+
+Bedömningen av en delad term blir `i enlighet` (≥ 70 % likhet), `nyans`
+(35–70 %) eller `avvikande` (< 35 %). Negationer som "inte", "never" eller
+"unlike" gör bedömningen till `motsägelse`.
+
 ## Webbgränssnitt
 
-Nuxt-SPA:t i `src/nuxt` visar böcker, koncept, kunskapsgrafen (SVG), frågor
-och quiz. Det pratar med API:t via `/api/` – i produktion via nginx-proxy, i
-utveckling via Nuxts dev-proxy. Gränssnittet följer designsystemet "A3 Folio"
-(djup mark, terrakotta, serif) med CSS-native rörelse – se AGENTS.md.
+Nuxt-SPA:t i `src/nuxt` visar böcker, koncept, kunskapsgrafen (SVG), analysen
+mot kunskapsbasen, frågor och quiz. Det pratar med API:t via `/api/` – i
+produktion via nginx-proxy, i utveckling via Nuxts dev-proxy. Gränssnittet
+följer designsystemet "A3 Folio" (djup mark, terrakotta, serif) med
+CSS-native rörelse – se AGENTS.md.
 
 ```bash
 # Terminal 1: API:t
