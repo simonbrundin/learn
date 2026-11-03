@@ -521,12 +521,13 @@ src/
     │   └── learn/     # CLI för kunskapssystemet
     ├── internal/
     │   ├── counter/   # Counter domain (exempel)
+    │   ├── api/       # HTTP-handlare för kunskapsbasen
     │   ├── epub/      # E-pub-parsning (zip/OPF/NCX)
     │   ├── text/      # Textanalys: meningar, nyckelord, definitioner, citat
     │   ├── knowledge/ # Konceptextraktion + kunskapsgraf
     │   ├── learning/  # Frågegenerator (SM-2) + nivåanpassade förklaringar
     │   ├── ideas/     # Idégenerering
-    │   ├── store/     # SQLite-lager (modernc.org/sqlite, CGO-fritt)
+    │   ├── store/     # SQLite-lager + repository-gränssnitt
     │   ├── learn/     # Importpipeline
     │   ├── model/     # Domänmodeller
     │   └── testutil/  # Testfixtures (bygger e-pub)
@@ -628,7 +629,43 @@ cd src/go && go test ./...
 Databasen ligger i `~/.learn/learn.db` (overridable via `LEARN_DB` eller `--db`).
 Paketen: `internal/epub` (parsning), `internal/text` (textanalys),
 `internal/knowledge` (koncept + graf), `internal/learning` (quiz + förklaringar),
-`internal/ideas` (idéer), `internal/store` (SQLite), `internal/learn` (pipeline).
+`internal/ideas` (idéer), `internal/store` (SQLite + `Repository`-gränssnitt),
+`internal/learn` (pipeline), `internal/api` (HTTP-handlare).
+
+### REST-API (Learn)
+
+API:t i `src/go/cmd/api` exponerar samma kunskapsbas över HTTP och delar
+SQLite-filen med CLI:t. Handlarna ligger i `internal/api` och arbetar mot
+`store.Repository`, så ett annat lager (t.ex. PostgreSQL) kan sättas in utan
+att ändra HTTP-lagret.
+
+```bash
+# Starta API:t
+cd src/go && go run ./cmd/api
+
+# Böcker, grafer, frågor
+curl localhost:8080/books
+curl localhost:8080/books/1/graph
+curl "localhost:8080/ask?q=Vad%20är%20System%201?&bookId=1"
+curl "localhost:8080/concepts/1/explain?level=novice"
+curl "localhost:8080/books/1/quiz?count=5"
+curl -X POST localhost:8080/questions/1/attempt \
+  -H 'Content-Type: application/json' -d '{"correct":true,"answer":"2"}'
+```
+
+OpenAPI-specen genereras med `swag init -g cmd/api/main.go -o cmd/api/docs
+--parseFuncBody` och visas i Scalar UI på `/docs/`. En ny endpoint måste ha
+swaggo-kommentarer (se AGENTS.md ovan).
+
+### Nuxt-SPA:t
+
+`src/nuxt` visar böcker, koncept, kunskapsgrafen (SVG), frågor och quiz mot
+API:t via `/api/`. I produktion går `/api/` via nginx-proxy till Go API:t; i
+utveckling används Nuxts `nitro.devProxy` mot `http://localhost:8080`.
+
+```bash
+cd src/nuxt && bun run dev
+```
 
 ### PostgreSQL (om lokal)
 

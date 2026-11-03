@@ -22,20 +22,20 @@ var Levels = []string{LevelNovice, LevelStandard, LevelAdvanced}
 
 // Related är en relaterat koncept med relation.
 type Related struct {
-	Name     string
-	Relation string
+	Name     string `json:"name"`
+	Relation string `json:"relation"`
 }
 
 // Explanation är en strukturerad förklaring av ett koncept.
 type Explanation struct {
-	Title      string
-	Level      string
-	Definition string
-	KeyPoints  []string
-	Example    string
-	Related    []Related
-	Quotes     []string
-	FollowUps  []string
+	Title      string    `json:"title"`
+	Level      string    `json:"level"`
+	Definition string    `json:"definition"`
+	KeyPoints  []string  `json:"key_points"`
+	Example    string    `json:"example"`
+	Related    []Related `json:"related"`
+	Quotes     []string  `json:"quotes"`
+	FollowUps  []string  `json:"follow_ups"`
 }
 
 // Text renderar förklaringen för terminalen.

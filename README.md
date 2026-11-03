@@ -51,16 +51,17 @@ learn/
 ├── src/
 │   ├── go/              # Go – API, CLI/TUI och kunskapssystemet
 │   │   ├── cmd/
-│   │   │   ├── api/     # REST API (Gin)
+│   │   │   ├── api/     # REST API (Gin) + OpenAPI/Scalar
 │   │   │   ├── cli/     # Enkel counter-CLI/TUI (demo)
 │   │   │   └── learn/   # Kommandoradsgränssnitt för kunskapssystemet
 │   │   └── internal/
+│   │       ├── api/     # HTTP-handlare för kunskapsbasen
 │   │       ├── epub/    # E-pub-parsning (zip/OPF/NCX)
 │   │       ├── text/    # Textanalys: meningar, nyckelord, definitioner
 │   │       ├── knowledge/ # Konceptextraktion + kunskapsgraf
 │   │       ├── learning/  # Frågegenerator (SM-2) + förklaringar
 │   │       ├── ideas/     # Idégenerering
-│   │       ├── store/     # SQLite-lager (modernc.org/sqlite, CGO-fritt)
+│   │       ├── store/     # SQLite-lager + repository-gränssnitt
 │   │       └── learn/     # Importpipeline
 │   └── nuxt/            # Nuxt SPA – se AGENTS.md
 └── environments/        # Kubernetes (kustomize) per miljö
@@ -68,10 +69,11 @@ learn/
 
 ## Teknisk Stack
 
-- **Go 1.27+** — Kärnlogik och CLI
+- **Go 1.27+** — Kärnlogik, CLI och REST-API
 - **Standardbiblioteket + x/net/html** — E-pub-parsning och textextraktion
 - **modernc.org/sqlite** — Lokal databas (`~/.learn/learn.db`), ren Go utan CGO
 - **heuristisk NLP** — koncept, definitioner och citat upptäcks utan tunga modeller
+- **Nuxt 4 + Vue 3** — SPA som visar grafen, koncept och quiz
 
 ## Kom igång
 
@@ -94,6 +96,60 @@ go build -o learn ./cmd/learn
 
 # Brainstorma
 ./learn brainstorm "Vad kan jag lära mig om X"
+```
+
+## REST-API
+
+Samma kunskapsbas kan läsas via HTTP. API:t och CLI:t delar SQLite-filen
+(`~/.learn/learn.db`, override med `LEARN_DB`).
+
+```bash
+# Starta API:t
+cd src/go && go run ./cmd/api
+
+# Böcker och grafer
+curl localhost:8080/books
+curl localhost:8080/books/1/graph
+
+# Fråga och förklara
+curl "localhost:8080/ask?q=Vad%20är%20System%201?&bookId=1"
+curl "localhost:8080/concepts/1/explain?level=novice"
+
+# Quiz och spaced repetition
+curl "localhost:8080/books/1/quiz?count=5"
+curl -X POST localhost:8080/questions/1/attempt \
+  -H 'Content-Type: application/json' -d '{"correct":true,"answer":"2"}'
+```
+
+Interaktiv OpenAPI-dokumentation finns på `http://localhost:8080/docs/`.
+
+| Endpoint | Beskrivning |
+| --- | --- |
+| `POST /books/import` | Importera en e-pub från serverns filsystem |
+| `GET /books` | Lista böcker |
+| `GET /books/{id}` | Bok med kapitel och antal koncept/relationer/frågor |
+| `GET /books/{id}/concepts?q=&limit=` | Koncept, filtrerbart |
+| `GET /books/{id}/graph` | Noder och relationer för visualisering |
+| `GET /books/{id}/quiz?count=&kinds=&regenerate=` | Frågor (genereras vid behov) |
+| `GET /books/{id}/ideas?seed=&limit=` | Idégenerering |
+| `GET /concepts/{id}/explain?level=` | Nivåanpassad förklaring |
+| `GET /concepts/{id}/related?limit=` | Grannar i grafen |
+| `GET /ask?q=&bookId=` | Svar på en fråga |
+| `GET /connect?from=&to=&bookId=` | Kopplingsväg mellan koncept |
+| `POST /questions/{id}/attempt` | Registrera svar och uppdatera SM-2-planen |
+
+## Webbgränssnitt
+
+Nuxt-SPA:t i `src/nuxt` visar böcker, koncept, kunskapsgrafen (SVG), frågor
+och quiz. Det pratar med API:t via `/api/` – i produktion via nginx-proxy, i
+utveckling via Nuxts dev-proxy.
+
+```bash
+# Terminal 1: API:t
+cd src/go && go run ./cmd/api
+
+# Terminal 2: frontend
+cd src/nuxt && bun run dev
 ```
 
 ## Arbetsflöde
@@ -160,9 +216,11 @@ Resultat: 8/10 rätt (80%)
 - [x] Konceptextraktion (heuristisk, utan NLP-beroende)
 - [x] Frågegenerator
 - [x] Kunskapsgraf med kopplingar och sökvägar
-- [ ] Kunskapsgraf med visualisering
-- [ ] Web-GUI med Gradio
+- [x] Kunskapsgraf med visualisering (SVG i Nuxt-SPA:t)
+- [x] REST-API med OpenAPI/Scalar-dokumentation
+- [x] Web-GUI (Nuxt SPA)
 - [x] Spaced repetition (SM-2 algoritm)
+- [ ] Kunskapsbas i PostgreSQL (K8s) i stället för lokal SQLite
 - [ ] AI-förklaringar med lokal modell
 - [ ] Moln sync (valfritt)
 - [ ] Mobilt GUI

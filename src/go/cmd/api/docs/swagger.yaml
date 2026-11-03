@@ -1,10 +1,625 @@
 basePath: /
+definitions:
+  api.AnswerResponse:
+    properties:
+      answer:
+        type: string
+      concepts:
+        items:
+          $ref: '#/definitions/model.Concept'
+        type: array
+    type: object
+  api.AttemptRequest:
+    properties:
+      answer:
+        type: string
+      correct:
+        type: boolean
+    type: object
+  api.AttemptResponse:
+    properties:
+      attempt:
+        $ref: '#/definitions/model.Attempt'
+      next_due:
+        type: string
+    type: object
+  api.BookDetailResponse:
+    properties:
+      book:
+        $ref: '#/definitions/model.Book'
+      chapters:
+        items:
+          $ref: '#/definitions/api.ChapterSummary'
+        type: array
+      concept_count:
+        type: integer
+      edge_count:
+        type: integer
+      question_count:
+        type: integer
+    type: object
+  api.BookListResponse:
+    properties:
+      books:
+        items:
+          $ref: '#/definitions/model.Book'
+        type: array
+    type: object
+  api.ChapterSummary:
+    properties:
+      id:
+        type: integer
+      index:
+        type: integer
+      title:
+        type: string
+      words:
+        type: integer
+    type: object
+  api.ConceptListResponse:
+    properties:
+      concepts:
+        items:
+          $ref: '#/definitions/model.Concept'
+        type: array
+    type: object
+  api.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  api.GraphEdge:
+    properties:
+      relation:
+        type: string
+      source:
+        type: integer
+      target:
+        type: integer
+      weight:
+        type: number
+    type: object
+  api.GraphNode:
+    properties:
+      definition:
+        type: string
+      id:
+        type: integer
+      importance:
+        type: number
+      name:
+        type: string
+    type: object
+  api.GraphResponse:
+    properties:
+      edges:
+        items:
+          $ref: '#/definitions/api.GraphEdge'
+        type: array
+      nodes:
+        items:
+          $ref: '#/definitions/api.GraphNode'
+        type: array
+    type: object
+  api.IdeasResponse:
+    properties:
+      ideas:
+        items:
+          $ref: '#/definitions/model.Idea'
+        type: array
+    type: object
+  api.ImportRequest:
+    properties:
+      max_concepts:
+        type: integer
+      path:
+        type: string
+    type: object
+  api.PathNode:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  api.PathResponse:
+    properties:
+      path:
+        items:
+          $ref: '#/definitions/api.PathNode'
+        type: array
+    type: object
+  api.QuizResponse:
+    properties:
+      questions:
+        items:
+          $ref: '#/definitions/model.Question'
+        type: array
+    type: object
+  api.RelatedConcept:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      relation:
+        type: string
+      weight:
+        type: number
+    type: object
+  api.RelatedResponse:
+    properties:
+      related:
+        items:
+          $ref: '#/definitions/api.RelatedConcept'
+        type: array
+    type: object
+  learning.Explanation:
+    properties:
+      definition:
+        type: string
+      example:
+        type: string
+      follow_ups:
+        items:
+          type: string
+        type: array
+      key_points:
+        items:
+          type: string
+        type: array
+      level:
+        type: string
+      quotes:
+        items:
+          type: string
+        type: array
+      related:
+        items:
+          $ref: '#/definitions/learning.Related'
+        type: array
+      title:
+        type: string
+    type: object
+  learning.Related:
+    properties:
+      name:
+        type: string
+      relation:
+        type: string
+    type: object
+  model.Attempt:
+    properties:
+      answered_at:
+        type: string
+      concept_id:
+        type: integer
+      correct:
+        type: boolean
+      due_at:
+        type: string
+      ease_factor:
+        type: number
+      id:
+        type: integer
+      interval_days:
+        type: number
+      question_id:
+        type: integer
+      repetitions:
+        type: integer
+    type: object
+  model.Book:
+    properties:
+      author:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      imported_at:
+        type: string
+      language:
+        type: string
+      source_path:
+        type: string
+      title:
+        type: string
+    type: object
+  model.Concept:
+    properties:
+      book_id:
+        type: integer
+      chapter_id:
+        type: integer
+      definition:
+        type: string
+      id:
+        type: integer
+      importance:
+        type: number
+      keywords:
+        items:
+          type: string
+        type: array
+      kind:
+        type: string
+      mentions:
+        type: integer
+      name:
+        type: string
+      quotes:
+        items:
+          type: string
+        type: array
+      summary:
+        type: string
+    type: object
+  model.Idea:
+    properties:
+      basis:
+        items:
+          type: string
+        type: array
+      book_id:
+        type: integer
+      id:
+        type: integer
+      kind:
+        type: string
+      prompt:
+        type: string
+    type: object
+  model.Question:
+    properties:
+      answer:
+        type: string
+      book_id:
+        type: integer
+      concept_id:
+        type: integer
+      difficulty:
+        type: string
+      explanation:
+        type: string
+      id:
+        type: integer
+      kind:
+        type: string
+      options:
+        items:
+          type: string
+        type: array
+      prompt:
+        type: string
+    type: object
 info:
   contact: {}
-  description: API for repo-template project
-  title: Repo Template API
+  description: 'API för kunskapssystemet: böcker, koncept, grafer, quiz och idéer'
+  title: Learn API
   version: "1.0"
 paths:
+  /ask:
+    get:
+      description: Rangerar koncepten mot frågan och svarar med definitioner och kopplingar
+      parameters:
+      - description: Frågan
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: Bok-ID
+        in: query
+        name: bookId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.AnswerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Ställ en fråga
+      tags:
+      - learning
+  /books:
+    get:
+      description: Returnerar alla importerade böcker, senast importerade först
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.BookListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Lista böcker
+      tags:
+      - books
+  /books/{bookId}:
+    get:
+      description: Returnerar boken med kapitel, antal koncept, relationer och frågor
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.BookDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Visa en bok
+      tags:
+      - books
+  /books/{bookId}/concepts:
+    get:
+      description: Returnerar koncepten i en bok, valfritt filtrerade på sökord
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      - description: Sökfilter på namn eller definition
+        in: query
+        name: q
+        type: string
+      - default: 50
+        description: Max antal koncept
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ConceptListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Lista koncept
+      tags:
+      - concepts
+  /books/{bookId}/graph:
+    get:
+      description: Returnerar noder och relationer för visualisering
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.GraphResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Hämta kunskapsgrafen
+      tags:
+      - knowledge
+  /books/{bookId}/ideas:
+    get:
+      description: Returnerar brainstorm-idéer baserade på bokens kunskapsgraf
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      - description: Ett eget tema att utgå från
+        in: query
+        name: seed
+        type: string
+      - default: 6
+        description: Antal idéer
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.IdeasResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Generera idéer
+      tags:
+      - ideas
+  /books/{bookId}/quiz:
+    get:
+      description: Returnerar frågor för boken, och genererar nya om inga finns
+      parameters:
+      - description: Bok-ID
+        in: path
+        name: bookId
+        required: true
+        type: integer
+      - default: 10
+        description: Antal frågor
+        in: query
+        name: count
+        type: integer
+      - description: Komma-separerade frågetyper
+        in: query
+        name: kinds
+        type: string
+      - description: Generera nya frågor
+        in: query
+        name: regenerate
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.QuizResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Hämta kunskapstest
+      tags:
+      - quiz
+  /books/import:
+    post:
+      consumes:
+      - application/json
+      description: Läser en e-pub från serverns filsystem och bygger kunskapsbasen
+      parameters:
+      - description: Sökväg till e-pub
+        in: body
+        name: path
+        required: true
+        schema:
+          $ref: '#/definitions/api.ImportRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/api.BookDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Importera en e-pub
+      tags:
+      - books
+  /concepts/{conceptId}/explain:
+    get:
+      description: Returnerar en nivåanpassad förklaring med nyckelpunkter, citat
+        och följdfrågor
+      parameters:
+      - description: Koncept-ID
+        in: path
+        name: conceptId
+        required: true
+        type: integer
+      - default: standard
+        description: novice|standard|advanced
+        in: query
+        name: level
+        type: string
+      - description: Bok-ID för grafen
+        in: query
+        name: bookId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/learning.Explanation'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Förklara ett koncept
+      tags:
+      - learning
+  /concepts/{conceptId}/related:
+    get:
+      description: Returnerar konceptet grannar i grafen, rankade på styrka
+      parameters:
+      - description: Koncept-ID
+        in: path
+        name: conceptId
+        required: true
+        type: integer
+      - description: Bok-ID
+        in: query
+        name: bookId
+        type: integer
+      - default: 5
+        description: Max antal grannar
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.RelatedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Relaterade koncept
+      tags:
+      - knowledge
+  /connect:
+    get:
+      description: Söker en väg i kunskapsgrafen mellan två koncept
+      parameters:
+      - description: Utgångskoncept
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: Slutkoncept
+        in: query
+        name: to
+        required: true
+        type: string
+      - description: Bok-ID
+        in: query
+        name: bookId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.PathResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Visa koppling mellan koncept
+      tags:
+      - knowledge
   /health:
     get:
       description: Returns the health status of the API
@@ -34,4 +649,35 @@ paths:
       summary: Hello world
       tags:
       - greeting
+  /questions/{questionId}/attempt:
+    post:
+      consumes:
+      - application/json
+      description: Sparar svaret och uppdaterar repetitionsplanen (SM-2)
+      parameters:
+      - description: Fråge-ID
+        in: path
+        name: questionId
+        required: true
+        type: integer
+      - description: Svaret
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/api.AttemptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.AttemptResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: Registrera ett svar
+      tags:
+      - quiz
 swagger: "2.0"

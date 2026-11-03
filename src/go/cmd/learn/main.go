@@ -412,7 +412,7 @@ func cmdQuiz(args []string, st *store.Store) int {
 
 	attempts := map[int64]model.Attempt{}
 	for _, question := range questions {
-		if attempt, ok := st.LatestAttempt(question.ID); ok {
+		if attempt, ok := st.LatestAttempt(question.ID); ok && attempt != nil {
 			attempts[question.ID] = *attempt
 		}
 	}
@@ -679,7 +679,7 @@ func grade(question model.Question, response string) bool {
 
 func recordAttempt(st *store.Store, question model.Question, correct bool) {
 	var previous *model.Attempt
-	if attempt, ok := st.LatestAttempt(question.ID); ok {
+	if attempt, ok := st.LatestAttempt(question.ID); ok && attempt != nil {
 		previous = attempt
 	}
 	attempt := learning.Scheduler{}.Update(previous, correct)

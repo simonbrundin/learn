@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -10,11 +11,14 @@ import (
 	openapiui "github.com/PeterTakahashi/gin-openapi/openapiui"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
+	"github.com/simon/repo-template/internal/api"
+	"github.com/simon/repo-template/internal/store"
 )
 
-// @title			Repo Template API
+// @title			Learn API
 // @version			1.0
-// @description		API for repo-template project
+// @description		API för kunskapssystemet: böcker, koncept, grafer, quiz och idéer
 // @BasePath		/
 
 func getDocsPath() string {
@@ -78,9 +82,28 @@ func main() {
 			}
 			return withHost(spec, host)
 		},
-		Title: "Repo Template API",
+		Title: "Learn API",
 		Theme: "dark",
 	}))
+
+	// Kunskapsbasen: böcker, koncept, grafer, quiz och idéer.
+	// Samma SQLite-fil som CLI:t använder (se LEARN_DB).
+	knowledgeBaseState := "ready"
+	repo, err := store.Open(store.DefaultPath())
+	if err != nil {
+		// API:t ska fortfarande starta så att health check fungerar,
+		// men kunskapsbasen blir tom.
+		fmt.Fprintln(os.Stderr, "Kunde inte öppna kunskapsdatabasen:", err)
+		fmt.Fprintln(os.Stderr, "Kunskapsbasen körs mot en tom databas i minnet.")
+		knowledgeBaseState = "empty"
+		repo, err = store.Open(":memory:")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Kunde inte starta en temporär databas:", err)
+			os.Exit(1)
+		}
+	}
+	defer repo.Close()
+	api.New(repo).Register(r)
 
 	// @Summary		Health check
 	// @Description	Returns the health status of the API
@@ -90,9 +113,10 @@ func main() {
 	// @Router		/health [get]
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status":    "ok",
-			"version":   os.Getenv("APP_VERSION"),
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"status":         "ok",
+			"version":        os.Getenv("APP_VERSION"),
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
+			"knowledge_base": knowledgeBaseState,
 		})
 	})
 

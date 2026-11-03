@@ -28,7 +28,7 @@ func (r *ImportResult) Summary() string {
 }
 
 // ImportBook parsar en e-pub, extraherar kunskap och sparar allt i databasen.
-func ImportBook(path string, st *store.Store, maxConcepts int) (*ImportResult, error) {
+func ImportBook(path string, repo store.Repository, maxConcepts int) (*ImportResult, error) {
 	parsed, err := epub.Parse(path)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func ImportBook(path string, st *store.Store, maxConcepts int) (*ImportResult, e
 	if book.Title == "" {
 		book.Title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
-	if err := st.AddBook(&book); err != nil {
+	if err := repo.AddBook(&book); err != nil {
 		return nil, err
 	}
 
@@ -62,7 +62,7 @@ func ImportBook(path string, st *store.Store, maxConcepts int) (*ImportResult, e
 			Title:  episode.Title,
 			Text:   episode.Text,
 		}
-		if err := st.AddChapter(&chapter); err != nil {
+		if err := repo.AddChapter(&chapter); err != nil {
 			return nil, err
 		}
 		chapters = append(chapters, chapter)
@@ -73,14 +73,14 @@ func ImportBook(path string, st *store.Store, maxConcepts int) (*ImportResult, e
 	for i := range concepts {
 		concepts[i].ChapterID = chapterFor(concepts[i], chapters).ID
 	}
-	if err := st.AddConcepts(concepts); err != nil {
+	if err := repo.AddConcepts(concepts); err != nil {
 		return nil, err
 	}
 
 	graph := knowledge.NewGraph()
 	graph.BuildFromContexts(concepts, extractor.Contexts(), book.ID)
 	for _, edge := range graph.Edges() {
-		if err := st.AddEdge(edge); err != nil {
+		if err := repo.AddEdge(edge); err != nil {
 			return nil, err
 		}
 	}
@@ -112,12 +112,12 @@ func chapterFor(concept model.Concept, chapters []model.Chapter) model.Chapter {
 }
 
 // BuildGraph bygger en kunskapsgraf från det som ligger i databasen.
-func BuildGraph(st *store.Store, bookID int64) (*knowledge.Graph, error) {
-	concepts, err := st.Concepts(bookID)
+func BuildGraph(repo store.Repository, bookID int64) (*knowledge.Graph, error) {
+	concepts, err := repo.Concepts(bookID)
 	if err != nil {
 		return nil, err
 	}
-	edges, err := st.Edges(bookID)
+	edges, err := repo.Edges(bookID)
 	if err != nil {
 		return nil, err
 	}
